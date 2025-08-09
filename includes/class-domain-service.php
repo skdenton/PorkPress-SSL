@@ -21,12 +21,29 @@ class Domain_Service {
         protected Porkbun_Client $client;
 
         /**
+         * Whether the API credentials are missing.
+         */
+        protected bool $missing_credentials = false;
+
+        /**
          * Constructor.
          */
         public function __construct() {
                 $api_key    = defined( 'PORKPRESS_API_KEY' ) ? PORKPRESS_API_KEY : get_site_option( 'porkpress_ssl_api_key', '' );
                 $api_secret = defined( 'PORKPRESS_API_SECRET' ) ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
+
+                if ( empty( $api_key ) || empty( $api_secret ) ) {
+                        $this->missing_credentials = true;
+                }
+
                 $this->client = new Porkbun_Client( $api_key, $api_secret );
+        }
+
+        /**
+         * Whether the service has the required API credentials.
+         */
+        public function has_credentials(): bool {
+                return ! $this->missing_credentials;
         }
 
         /**
