@@ -114,4 +114,157 @@ class Domain_Service {
                return true;
        }
 
+       /**
+        * Get the domain aliases table name.
+        *
+        * @return string
+        */
+       public static function get_alias_table_name(): string {
+               global $wpdb;
+
+               return $wpdb->base_prefix . 'porkpress_domain_aliases';
+       }
+
+       /**
+        * Create the domain aliases table if it does not exist.
+        */
+       public static function create_alias_table(): void {
+               global $wpdb;
+
+               $table_name      = self::get_alias_table_name();
+               $charset_collate = $wpdb->get_charset_collate();
+
+               $sql = "CREATE TABLE {$table_name} (
+site_id bigint(20) unsigned NOT NULL,
+domain varchar(191) NOT NULL,
+is_primary tinyint(1) NOT NULL DEFAULT 0,
+status varchar(20) NOT NULL DEFAULT '',
+PRIMARY KEY  (site_id, domain),
+KEY domain (domain)
+) {$charset_collate};";
+
+               require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+               dbDelta( $sql );
+       }
+
+       /**
+        * Create a domain alias entry.
+        *
+        * @param int    $site_id    Site ID.
+        * @param string $domain     Domain name.
+        * @param bool   $is_primary Whether the alias is primary.
+        * @param string $status     Alias status.
+        *
+        * @return bool True on success, false on failure.
+        */
+       public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool {
+               global $wpdb;
+
+               $table = self::get_alias_table_name();
+               $data  = array(
+                       'site_id'    => $site_id,
+                       'domain'     => strtolower( sanitize_text_field( $domain ) ),
+                       'is_primary' => $is_primary ? 1 : 0,
+                       'status'     => sanitize_text_field( $status ),
+               );
+
+               return false !== $wpdb->insert( $table, $data, array( '%d', '%s', '%d', '%s' ) );
+       }
+
+       /**
+        * Retrieve domain aliases.
+        *
+        * @param int|null    $site_id Optional site ID to filter.
+        * @param string|null $domain  Optional domain to filter.
+        *
+        * @return array List of alias records.
+        */
+       public function get_aliases( ?int $site_id = null, ?string $domain = null ): array {
+               global $wpdb;
+
+               $table  = self::get_alias_table_name();
+               $where  = array();
+               $params = array();
+
+               if ( null !== $site_id ) {
+                       $where[]  = 'site_id = %d';
+                       $params[] = $site_id;
+               }
+
+               if ( null !== $domain ) {
+                       $where[]  = 'domain = %s';
+                       $params[] = strtolower( sanitize_text_field( $domain ) );
+               }
+
+               $sql = "SELECT * FROM {$table}";
+               if ( $where ) {
+                       $sql .= ' WHERE ' . implode( ' AND ', $where );
+                       $sql  = $wpdb->prepare( $sql, $params );
+               }
+
+               return $wpdb->get_results( $sql, ARRAY_A );
+       }
+
+       /**
+        * Update a domain alias.
+        *
+        * @param int    $site_id Site ID.
+        * @param string $domain  Domain name.
+        * @param array  $data    Data to update (is_primary, status).
+        *
+        * @return bool True on success, false on failure.
+        */
+       public function update_alias( int $site_id, string $domain, array $data ): bool {
+               global $wpdb;
+
+               $fields  = array();
+               $formats = array();
+
+               if ( array_key_exists( 'is_primary', $data ) ) {
+                       $fields['is_primary'] = $data['is_primary'] ? 1 : 0;
+                       $formats[]            = '%d';
+               }
+
+               if ( array_key_exists( 'status', $data ) ) {
+                       $fields['status'] = sanitize_text_field( $data['status'] );
+                       $formats[]        = '%s';
+               }
+
+               if ( empty( $fields ) ) {
+                       return false;
+               }
+
+               return false !== $wpdb->update(
+                       self::get_alias_table_name(),
+                       $fields,
+                       array(
+                               'site_id' => $site_id,
+                               'domain'  => strtolower( sanitize_text_field( $domain ) ),
+                       ),
+                       $formats,
+                       array( '%d', '%s' )
+               );
+       }
+
+       /**
+        * Delete a domain alias.
+        *
+        * @param int    $site_id Site ID.
+        * @param string $domain  Domain name.
+        *
+        * @return bool True on success, false on failure.
+        */
+       public function delete_alias( int $site_id, string $domain ): bool {
+               global $wpdb;
+
+               return false !== $wpdb->delete(
+                       self::get_alias_table_name(),
+                       array(
+                               'site_id' => $site_id,
+                               'domain'  => strtolower( sanitize_text_field( $domain ) ),
+                       ),
+                       array( '%d', '%s' )
+               );
+       }
+
 }
