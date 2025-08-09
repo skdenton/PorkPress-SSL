@@ -290,56 +290,70 @@ echo '</form>';
 /**
  * Render the logs tab for the network admin page.
  */
-public function render_logs_tab() {
-if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
-return;
-}
+        public function render_logs_tab() {
+                if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                        return;
+                }
 
-$severity = isset( $_GET['severity'] ) ? sanitize_key( wp_unslash( $_GET['severity'] ) ) : '';
+                global $wpdb;
+                $table_name = $wpdb->prefix . 'porkpress_logs';
 
-if ( isset( $_GET['export'] ) && 'csv' === $_GET['export'] ) {
-$logs = Logger::get_logs( array( 'severity' => $severity, 'limit' => 0 ) );
-header( 'Content-Type: text/csv' );
-header( 'Content-Disposition: attachment; filename="porkpress-logs.csv"' );
-$fh = fopen( 'php://output', 'w' );
-fputcsv( $fh, array( 'time', 'user', 'action', 'context', 'result', 'severity' ) );
-foreach ( $logs as $log ) {
-$user = $log['user_id'] ? get_userdata( $log['user_id'] ) : null;
-fputcsv( $fh, array( $log['time'], $user ? $user->user_login : '', $log['action'], $log['context'], $log['result'], $log['severity'] ) );
-}
-exit;
-}
+                if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table_name}'" ) !== $table_name ) {
+                        printf( '<div class="error"><p>%s</p></div>', esc_html__( 'Logs table does not exist.', 'porkpress-ssl' ) );
+                        return;
+                }
 
-$logs = Logger::get_logs( array( 'severity' => $severity ) );
+                $severity = isset( $_GET['severity'] ) ? sanitize_key( wp_unslash( $_GET['severity'] ) ) : '';
 
-echo '<form method="get">';
-echo '<input type="hidden" name="page" value="porkpress-ssl" />';
-echo '<input type="hidden" name="tab" value="logs" />';
-echo '<select name="severity">';
-echo '<option value="">' . esc_html__( 'All Severities', 'porkpress-ssl' ) . '</option>';
-foreach ( array( 'info', 'warn', 'error' ) as $sev ) {
-echo '<option value="' . esc_attr( $sev ) . '"' . selected( $severity, $sev, false ) . '>' . esc_html( ucfirst( $sev ) ) . '</option>';
-}
-echo '</select> ';
-submit_button( __( 'Filter', 'porkpress-ssl' ), 'secondary', '', false );
-echo ' <a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'csv' ) ) ) . '">' . esc_html__( 'Export CSV', 'porkpress-ssl' ) . '</a>';
-echo '</form>';
+                if ( isset( $_GET['export'] ) && 'csv' === $_GET['export'] ) {
+                        $logs = Logger::get_logs( array( 'severity' => $severity, 'limit' => 0 ) );
+                        header( 'Content-Type: text/csv' );
+                        header( 'Content-Disposition: attachment; filename="porkpress-logs.csv"' );
+                        $fh = fopen( 'php://output', 'w' );
+                        fputcsv( $fh, array( 'time', 'user', 'action', 'context', 'result', 'severity' ) );
+                        foreach ( $logs as $log ) {
+                                $user = $log['user_id'] ? get_userdata( $log['user_id'] ) : null;
+                                fputcsv( $fh, array( $log['time'], $user ? $user->user_login : '', $log['action'], $log['context'], $log['result'], $log['severity'] ) );
+                        }
+                        exit;
+                }
 
-echo '<table class="widefat fixed">';
-echo '<thead><tr><th>' . esc_html__( 'Time', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'User', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Action', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Context', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Result', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Severity', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
-foreach ( $logs as $log ) {
-$user = $log['user_id'] ? get_userdata( $log['user_id'] ) : null;
-echo '<tr>';
-echo '<td>' . esc_html( $log['time'] ) . '</td>';
-echo '<td>' . esc_html( $user ? $user->user_login : '' ) . '</td>';
-echo '<td>' . esc_html( $log['action'] ) . '</td>';
-echo '<td><code>' . esc_html( $log['context'] ) . '</code></td>';
-echo '<td>' . esc_html( $log['result'] ) . '</td>';
-echo '<td>' . esc_html( $log['severity'] ) . '</td>';
-echo '</tr>';
-}
-echo '</tbody></table>';
-}
+                $logs = Logger::get_logs( array( 'severity' => $severity ) );
+
+                echo '<form method="get">';
+                echo '<input type="hidden" name="page" value="porkpress-ssl" />';
+                echo '<input type="hidden" name="tab" value="logs" />';
+                echo '<select name="severity">';
+                echo '<option value="">' . esc_html__( 'All Severities', 'porkpress-ssl' ) . '</option>';
+                foreach ( array( 'info', 'warn', 'error' ) as $sev ) {
+                        echo '<option value="' . esc_attr( $sev ) . '"' . selected( $severity, $sev, false ) . '>' . esc_html( ucfirst( $sev ) ) . '</option>';
+                }
+                echo '</select> ';
+                submit_button( __( 'Filter', 'porkpress-ssl' ), 'secondary', '', false );
+                echo ' <a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'csv' ) ) ) . '">' . esc_html__( 'Export CSV', 'porkpress-ssl' ) . '</a>';
+                echo '</form>';
+
+                echo '<table class="widefat fixed">';
+                echo '<thead><tr><th>' . esc_html__( 'Time', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'User', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Action', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Context', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Result', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Severity', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
+
+                if ( empty( $logs ) ) {
+                        echo '<tr><td colspan="6">' . esc_html__( 'No logs found.', 'porkpress-ssl' ) . '</td></tr>';
+                } else {
+                        foreach ( $logs as $log ) {
+                                $user = $log['user_id'] ? get_userdata( $log['user_id'] ) : null;
+                                echo '<tr>';
+                                echo '<td>' . esc_html( $log['time'] ) . '</td>';
+                                echo '<td>' . esc_html( $user ? $user->user_login : '' ) . '</td>';
+                                echo '<td>' . esc_html( $log['action'] ) . '</td>';
+                                echo '<td><code>' . esc_html( $log['context'] ) . '</code></td>';
+                                echo '<td>' . esc_html( $log['result'] ) . '</td>';
+                                echo '<td>' . esc_html( $log['severity'] ) . '</td>';
+                                echo '</tr>';
+                        }
+                }
+
+                echo '</tbody></table>';
+        }
 
 /**
  * Render the site plugin page.
