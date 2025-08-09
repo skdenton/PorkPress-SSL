@@ -111,7 +111,15 @@ class Admin {
                 $expiry_window = isset( $_GET['expiry'] ) ? absint( wp_unslash( $_GET['expiry'] ) ) : 0;
 
                 $service = new Domain_Service();
-                $result  = $service->list_domains();
+                if ( ! $service->has_credentials() ) {
+                        printf(
+                                '<div class="error"><p>%s</p></div>',
+                                esc_html__( 'Porkbun API credentials are missing. Please configure them in the Settings tab.', 'porkpress-ssl' )
+                        );
+                        return;
+                }
+
+                $result = $service->list_domains();
                 if ( $result instanceof Porkbun_Client_Error ) {
                         $message = $result->message;
                         if ( $result->status ) {
