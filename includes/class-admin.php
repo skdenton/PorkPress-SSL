@@ -13,31 +13,49 @@ defined( 'ABSPATH' ) || exit;
  * Class Admin
  */
 class Admin {
-	/**
-	 * Initialize hooks.
-	 */
-	public function init() {
-		add_action( 'network_admin_menu', array( $this, 'register_menu' ) );
-	}
+        /**
+         * Initialize hooks.
+         */
+        public function init() {
+                add_action( 'network_admin_menu', array( $this, 'register_network_menu' ) );
+                add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
+        }
 
-	/**
-	 * Register the network admin menu.
-	 */
-	public function register_menu() {
-		add_menu_page(
-			__( 'PorkPress SSL', 'porkpress-ssl' ),
-			__( 'PorkPress SSL', 'porkpress-ssl' ),
-			'manage_network',
-			'porkpress-ssl',
-			array( $this, 'render_page' )
-		);
-	}
+        /**
+         * Register the network admin menu.
+         */
+        public function register_network_menu() {
+                add_menu_page(
+                        __( 'PorkPress SSL', 'porkpress-ssl' ),
+                        __( 'PorkPress SSL', 'porkpress-ssl' ),
+                        \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS,
+                        'porkpress-ssl',
+                        array( $this, 'render_network_page' )
+                );
+        }
 
-	/**
-	 * Render the plugin page.
-	 */
-	public function render_page() {
-		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'dashboard';
+        /**
+         * Register the site admin menu.
+         */
+        public function register_site_menu() {
+                add_menu_page(
+                        __( 'Request Domain', 'porkpress-ssl' ),
+                        __( 'Request Domain', 'porkpress-ssl' ),
+                        \PORKPRESS_SSL_CAP_REQUEST_DOMAIN,
+                        'porkpress-ssl-request',
+                        array( $this, 'render_site_page' )
+                );
+        }
+
+        /**
+         * Render the network plugin page.
+         */
+        public function render_network_page() {
+                if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                        wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
+                }
+
+                $active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'dashboard';
 
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'PorkPress SSL', 'porkpress-ssl' ) . '</h1>';
@@ -77,6 +95,20 @@ class Admin {
 				break;
 		}
 
-		echo '</div>';
-	}
+                echo '</div>';
+        }
+
+        /**
+         * Render the site plugin page.
+         */
+        public function render_site_page() {
+                if ( ! current_user_can( \PORKPRESS_SSL_CAP_REQUEST_DOMAIN ) ) {
+                        wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
+                }
+
+                echo '<div class="wrap">';
+                echo '<h1>' . esc_html__( 'Request Domain', 'porkpress-ssl' ) . '</h1>';
+                echo '<p>' . esc_html__( 'Domain request form coming soon.', 'porkpress-ssl' ) . '</p>';
+                echo '</div>';
+        }
 }

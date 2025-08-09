@@ -20,6 +20,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 const PORKPRESS_SSL_VERSION = '0.1.0';
+const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
+const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
 require_once __DIR__ . '/includes/class-admin.php';
 require_once __DIR__ . '/includes/class-porkbun-client.php';
 require_once __DIR__ . '/includes/class-domain-service.php';
@@ -31,7 +33,22 @@ require_once __DIR__ . '/includes/class-reconciler.php';
  * Activation hook callback.
  */
 function porkpress_ssl_activate() {
-	// Placeholder for activation logic.
+        // Grant request capability to site administrators on all sites.
+        if ( is_multisite() ) {
+                foreach ( get_sites() as $site ) {
+                        switch_to_blog( $site->blog_id );
+                        $role = get_role( 'administrator' );
+                        if ( $role ) {
+                                $role->add_cap( PORKPRESS_SSL_CAP_REQUEST_DOMAIN );
+                        }
+                        restore_current_blog();
+                }
+        } else {
+                $role = get_role( 'administrator' );
+                if ( $role ) {
+                        $role->add_cap( PORKPRESS_SSL_CAP_REQUEST_DOMAIN );
+                }
+        }
 }
 register_activation_hook( __FILE__, 'porkpress_ssl_activate' );
 
@@ -39,7 +56,22 @@ register_activation_hook( __FILE__, 'porkpress_ssl_activate' );
  * Deactivation hook callback.
  */
 function porkpress_ssl_deactivate() {
-	// Placeholder for deactivation logic.
+        // Remove request capability from site administrators on all sites.
+        if ( is_multisite() ) {
+                foreach ( get_sites() as $site ) {
+                        switch_to_blog( $site->blog_id );
+                        $role = get_role( 'administrator' );
+                        if ( $role ) {
+                                $role->remove_cap( PORKPRESS_SSL_CAP_REQUEST_DOMAIN );
+                        }
+                        restore_current_blog();
+                }
+        } else {
+                $role = get_role( 'administrator' );
+                if ( $role ) {
+                        $role->remove_cap( PORKPRESS_SSL_CAP_REQUEST_DOMAIN );
+                }
+        }
 }
 register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
 
@@ -47,7 +79,25 @@ register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
  * Initialize the plugin.
  */
 function porkpress_ssl_init() {
-	$admin = new \PorkPress\SSL\Admin();
-	$admin->init();
+        $admin = new \PorkPress\SSL\Admin();
+        $admin->init();
 }
 add_action( 'plugins_loaded', 'porkpress_ssl_init' );
+
+/**
+ * Map meta capabilities for the plugin.
+ *
+ * @param array  $caps    Primitive capabilities.
+ * @param string $cap     Capability being checked.
+ * @param int    $user_id User ID.
+ *
+ * @return array
+ */
+function porkpress_ssl_map_meta_cap( $caps, $cap, $user_id ) {
+        if ( PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS === $cap ) {
+                return user_can( $user_id, 'manage_network' ) ? array( 'manage_network' ) : array( 'do_not_allow' );
+        }
+
+        return $caps;
+}
+add_filter( 'map_meta_cap', 'porkpress_ssl_map_meta_cap', 10, 3 );
