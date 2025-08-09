@@ -75,13 +75,27 @@ class Porkbun_Client {
 	/**
 	 * List domains with pagination.
 	 */
-	public function listDomains( int $page = 1, int $per_page = 100 ) {
-		$start = max( 0, ( $page - 1 ) * $per_page );
+        public function listDomains( int $page = 1, int $per_page = 100 ) {
+                $start = max( 0, ( $page - 1 ) * $per_page );
 
-		return $this->request( 'domain/listAll', [
-			'start' => (string) $start,
-		] );
-	}
+                return $this->request( 'domain/listAll', [
+                        'start' => (string) $start,
+                ] );
+        }
+
+       /**
+        * Disable a domain.
+        */
+       public function disableDomain( string $domain ) {
+               return $this->request( "domain/disableDomain/{$domain}", [] );
+       }
+
+       /**
+        * Delete a domain from Porkbun.
+        */
+       public function deleteDomain( string $domain ) {
+               return $this->request( "domain/deleteDomain/{$domain}", [] );
+       }
 
 	/**
 	 * Retrieve DNS records for a domain.

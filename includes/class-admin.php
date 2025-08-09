@@ -19,6 +19,7 @@ class Admin {
         public function init() {
                 add_action( 'network_admin_menu', array( $this, 'register_network_menu' ) );
                 add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
+               add_action( 'wp_ajax_porkpress_ssl_bulk_action', array( $this, 'handle_bulk_action' ) );
         }
 
         /**
@@ -172,16 +173,24 @@ class Admin {
                 echo '</p>';
                 echo '</form>';
 
-                echo '<table class="widefat fixed striped">';
-                echo '<thead><tr>';
-                echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
-                echo '<th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th>';
-                echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
-                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
-                echo '</tr></thead><tbody>';
+               wp_enqueue_script( 'porkpress-domain-bulk', plugins_url( '../assets/domain-bulk.js', __FILE__ ), array( 'jquery' ), PORKPRESS_SSL_VERSION, true );
+               wp_localize_script( 'porkpress-domain-bulk', 'porkpressBulk', array(
+                       'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                       'nonce'   => wp_create_nonce( 'porkpress_ssl_bulk_action' ),
+               ) );
+
+               echo '<form id="porkpress-domain-actions" method="post">';
+               echo '<table class="widefat fixed striped">';
+               echo '<thead><tr>';
+               echo '<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all" /></td>';
+               echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
+               echo '</tr></thead><tbody>';
 
                 if ( empty( $domains ) ) {
-                        echo '<tr><td colspan="4">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+                       echo '<tr><td colspan="5">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
                 } else {
                         foreach ( $domains as $domain ) {
                                 $name       = $domain['domain'] ?? $domain['name'] ?? '';
@@ -189,17 +198,75 @@ class Admin {
                                 $expiry     = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
                                 $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
 
-                                echo '<tr>';
-                                echo '<td>' . esc_html( $name ) . '</td>';
-                                echo '<td>' . esc_html( $type ) . '</td>';
-                                echo '<td>' . esc_html( $expiry ) . '</td>';
-                                echo '<td>' . esc_html( $dns_status ) . '</td>';
-                                echo '</tr>';
-                        }
-                }
+                               echo '<tr>';
+                               echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
+                               echo '<td>' . esc_html( $name ) . '</td>';
+                               echo '<td>' . esc_html( $type ) . '</td>';
+                               echo '<td>' . esc_html( $expiry ) . '</td>';
+                               echo '<td>' . esc_html( $dns_status ) . '</td>';
+                               echo '</tr>';
+                       }
+               }
 
-                echo '</tbody></table>';
-        }
+               echo '</tbody></table>';
+               echo '<div class="tablenav bottom">';
+               echo '<div class="alignleft actions bulkactions">';
+               echo '<select name="bulk_action"><option value="">' . esc_html__( 'Bulk actions', 'porkpress-ssl' ) . '</option>';
+               echo '<option value="attach">' . esc_html__( 'Attach to site', 'porkpress-ssl' ) . '</option>';
+               echo '<option value="detach">' . esc_html__( 'Detach from site', 'porkpress-ssl' ) . '</option>';
+               echo '<option value="disable">' . esc_html__( 'Disable in Porkbun', 'porkpress-ssl' ) . '</option>';
+               echo '<option value="remove">' . esc_html__( 'Remove from Porkbun', 'porkpress-ssl' ) . '</option>';
+               echo '</select> ';
+               echo '<input type="number" name="site_id" class="small-text" placeholder="' . esc_attr__( 'Site ID', 'porkpress-ssl' ) . '" /> ';
+               submit_button( __( 'Apply', 'porkpress-ssl' ), 'secondary', 'apply', false );
+               echo '</div>';
+               echo '<div id="porkpress-domain-progress" class="alignleft actions"></div>';
+               echo '</div>';
+               echo '</form>';
+       }
+
+       /**
+        * AJAX handler for domain bulk actions.
+        */
+       public function handle_bulk_action() {
+               check_ajax_referer( 'porkpress_ssl_bulk_action', 'nonce' );
+
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       wp_send_json_error( 'no_permission' );
+               }
+
+               $domain = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
+               $action = isset( $_POST['bulk_action'] ) ? sanitize_key( wp_unslash( $_POST['bulk_action'] ) ) : '';
+               $site_id = isset( $_POST['site_id'] ) ? absint( wp_unslash( $_POST['site_id'] ) ) : 0;
+
+               $service = new Domain_Service();
+
+               switch ( $action ) {
+                       case 'attach':
+                               $result = $service->attach_to_site( $domain, $site_id );
+                               break;
+                       case 'detach':
+                               $result = $service->detach_from_site( $domain );
+                               break;
+                       case 'disable':
+                               $result = $service->disable_domain( $domain );
+                               break;
+                       case 'remove':
+                               $result = $service->remove_domain( $domain );
+                               break;
+                       default:
+                               wp_send_json_error( 'unknown_action' );
+               }
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       Logger::error( $action, array( 'domain' => $domain ), $result->message );
+                       wp_send_json_error( $result->message );
+               }
+
+               Logger::info( $action, array( 'domain' => $domain, 'site_id' => $site_id ), 'success' );
+
+               wp_send_json_success( $result );
+       }
 
 /**
  * Render the settings tab for the network admin page.

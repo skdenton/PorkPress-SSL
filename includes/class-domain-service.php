@@ -79,4 +79,60 @@ class Domain_Service {
 
                return $result;
        }
+
+       /**
+        * Attach a domain to a site.
+        *
+        * @param string $domain Domain name.
+        * @param int    $site_id Site ID.
+        *
+        * @return bool|Porkbun_Client_Error
+        */
+       public function attach_to_site( string $domain, int $site_id ) {
+               if ( function_exists( 'update_site_meta' ) ) {
+                       update_site_meta( $site_id, 'porkpress_domain', $domain );
+               }
+
+               return true;
+       }
+
+       /**
+        * Detach a domain from any site.
+        *
+        * @param string $domain Domain name.
+        *
+        * @return bool
+        */
+       public function detach_from_site( string $domain ): bool {
+               if ( function_exists( 'get_sites' ) && function_exists( 'delete_site_meta' ) ) {
+                       $sites = get_sites( array( 'meta_key' => 'porkpress_domain', 'meta_value' => $domain ) );
+                       foreach ( $sites as $site ) {
+                               delete_site_meta( $site->blog_id, 'porkpress_domain', $domain );
+                       }
+               }
+
+               return true;
+       }
+
+       /**
+        * Disable a domain in Porkbun.
+        *
+        * @param string $domain Domain name.
+        *
+        * @return array|Porkbun_Client_Error
+        */
+       public function disable_domain( string $domain ) {
+               return $this->client->disableDomain( $domain );
+       }
+
+       /**
+        * Remove a domain from Porkbun.
+        *
+        * @param string $domain Domain name.
+        *
+        * @return array|Porkbun_Client_Error
+        */
+       public function remove_domain( string $domain ) {
+               return $this->client->deleteDomain( $domain );
+       }
 }
