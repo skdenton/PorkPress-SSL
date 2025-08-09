@@ -77,26 +77,117 @@ class Admin {
 			);
 		}
 
-echo '</h2>';
+                echo '</h2>';
 
-switch ( $active_tab ) {
-case 'domains':
-echo '<p>' . esc_html__( 'Domains content coming soon.', 'porkpress-ssl' ) . '</p>';
-break;
-case 'settings':
-$this->render_settings_tab();
-break;
-case 'logs':
-$this->render_logs_tab();
-break;
-case 'dashboard':
-default:
-echo '<p>' . esc_html__( 'Dashboard content coming soon.', 'porkpress-ssl' ) . '</p>';
-break;
-}
+                switch ( $active_tab ) {
+                        case 'domains':
+                                $this->render_domains_tab();
+                                break;
+                        case 'settings':
+                                $this->render_settings_tab();
+                                break;
+                        case 'logs':
+                                $this->render_logs_tab();
+                                break;
+                        case 'dashboard':
+                        default:
+                                echo '<p>' . esc_html__( 'Dashboard content coming soon.', 'porkpress-ssl' ) . '</p>';
+                                break;
+                }
 
-echo '</div>';
-}
+                echo '</div>';
+        }
+
+        /**
+         * Render the domains tab for the network admin page.
+         */
+        public function render_domains_tab() {
+                if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                        return;
+                }
+
+                $search       = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+                $status       = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
+                $expiry_window = isset( $_GET['expiry'] ) ? absint( wp_unslash( $_GET['expiry'] ) ) : 0;
+
+                $service = new Domain_Service();
+                $result  = $service->list_domains();
+                if ( $result instanceof Porkbun_Client_Error ) {
+                        printf( '<div class="error"><p>%s</p></div>', esc_html( $result->message ) );
+                        return;
+                }
+
+                $domains = $result['domains'] ?? array();
+                $domains = array_filter(
+                        $domains,
+                        function ( $domain ) use ( $search, $status, $expiry_window ) {
+                                $name = $domain['domain'] ?? $domain['name'] ?? '';
+                                if ( $search && false === stripos( $name, $search ) ) {
+                                        return false;
+                                }
+
+                                $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
+                                if ( $status && 0 !== strcasecmp( $dns_status, $status ) ) {
+                                        return false;
+                                }
+
+                                if ( $expiry_window > 0 ) {
+                                        $expiry = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
+                                        $time   = strtotime( $expiry );
+                                        if ( $time && $time - time() > $expiry_window * DAY_IN_SECONDS ) {
+                                                return false;
+                                        }
+                                }
+
+                                return true;
+                        }
+                );
+
+                echo '<form method="get">';
+                echo '<input type="hidden" name="page" value="porkpress-ssl" />';
+                echo '<input type="hidden" name="tab" value="domains" />';
+                echo '<p class="search-box">';
+                echo '<label class="screen-reader-text" for="domain-search-input">' . esc_html__( 'Search domains', 'porkpress-ssl' ) . '</label>';
+                echo '<input type="search" id="domain-search-input" name="s" value="' . esc_attr( $search ) . '" />';
+                submit_button( __( 'Search Domains', 'porkpress-ssl' ), '', '', false, array( 'id' => 'search-submit' ) );
+                echo '</p>';
+                echo '<p class="filter-box">';
+                echo '<label for="status-filter">' . esc_html__( 'Status', 'porkpress-ssl' ) . '</label> ';
+                echo '<input type="text" id="status-filter" name="status" value="' . esc_attr( $status ) . '" /> ';
+                echo '<label for="expiry-filter">' . esc_html__( 'Expiry within (days)', 'porkpress-ssl' ) . '</label> ';
+                echo '<input type="number" id="expiry-filter" class="small-text" name="expiry" value="' . esc_attr( $expiry_window ) . '" min="0" /> ';
+                submit_button( __( 'Filter', 'porkpress-ssl' ), '', '', false );
+                echo '</p>';
+                echo '</form>';
+
+                echo '<table class="widefat fixed striped">';
+                echo '<thead><tr>';
+                echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
+                echo '<th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th>';
+                echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
+                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
+                echo '</tr></thead><tbody>';
+
+                if ( empty( $domains ) ) {
+                        echo '<tr><td colspan="4">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+                } else {
+                        foreach ( $domains as $domain ) {
+                                $name       = $domain['domain'] ?? $domain['name'] ?? '';
+                                $type       = $domain['type'] ?? '';
+                                $expiry     = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
+                                $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
+
+                                echo '<tr>';
+                                echo '<td>' . esc_html( $name ) . '</td>';
+                                echo '<td>' . esc_html( $type ) . '</td>';
+                                echo '<td>' . esc_html( $expiry ) . '</td>';
+                                echo '<td>' . esc_html( $dns_status ) . '</td>';
+                                echo '</tr>';
+                        }
+                }
+
+                echo '</tbody></table>';
+        }
 
 /**
  * Render the settings tab for the network admin page.
