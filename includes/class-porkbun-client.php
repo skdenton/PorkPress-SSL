@@ -35,7 +35,7 @@ class Porkbun_Client {
 	 *
 	 * @var string
 	 */
-	private string $base_url = 'https://porkbun.com/api/json/v3/';
+	private string $base_url = 'https://api.porkbun.com/api/json/v3/';
 
 	/**
 	 * API key.
@@ -76,9 +76,10 @@ class Porkbun_Client {
 	 * List domains with pagination.
 	 */
 	public function listDomains( int $page = 1, int $per_page = 100 ) {
-		return $this->request( 'domains/list', [
-			'page'	  => $page,
-			'perpage' => $per_page,
+		$start = max( 0, ( $page - 1 ) * $per_page );
+
+		return $this->request( 'domain/listAll', [
+			'start' => (string) $start,
 		] );
 	}
 
