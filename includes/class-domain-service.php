@@ -50,11 +50,33 @@ class Domain_Service {
          * List domains.
          *
          * @param int $page     Page number.
-         * @param int $per_page Domains per page.
-         *
-         * @return array|Porkbun_Client_Error
-         */
-        public function list_domains( int $page = 1, int $per_page = 100 ) {
-                return $this->client->listDomains( $page, $per_page );
-        }
+        * @param int $per_page Domains per page.
+        *
+        * @return array|Porkbun_Client_Error
+        */
+       public function list_domains( int $page = 1, int $per_page = 100 ) {
+               $result = $this->client->listDomains( $page, $per_page );
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       return $result;
+               }
+
+               if ( isset( $result['domains'] ) && is_array( $result['domains'] ) ) {
+                       $result['domains'] = array_map(
+                               function ( $domain ) {
+                                       if ( isset( $domain['tld'] ) && ! isset( $domain['type'] ) ) {
+                                               $domain['type'] = $domain['tld'];
+                                       }
+                                       if ( isset( $domain['expireDate'] ) && ! isset( $domain['expiry'] ) ) {
+                                               $domain['expiry'] = $domain['expireDate'];
+                                       }
+
+                                       return $domain;
+                               },
+                               $result['domains']
+                       );
+               }
+
+               return $result;
+       }
 }
