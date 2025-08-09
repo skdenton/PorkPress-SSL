@@ -128,6 +128,20 @@ update_site_option( 'porkpress_ssl_txt_timeout', $txt_timeout );
 $txt_interval = isset( $_POST['porkpress_txt_interval'] ) ? absint( wp_unslash( $_POST['porkpress_txt_interval'] ) ) : 0;
 update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
 
+// Log the settings update without exposing sensitive values.
+Logger::info(
+    'update_settings',
+    array(
+        'api_key_changed'    => ! $api_key_locked && isset( $_POST['porkpress_api_key'] ),
+        'api_secret_changed' => ! $api_secret_locked && isset( $_POST['porkpress_api_secret'] ),
+        'le_staging'         => (bool) $staging,
+        'renew_window'       => $renew_window,
+        'txt_timeout'        => $txt_timeout,
+        'txt_interval'       => $txt_interval,
+    ),
+    'Settings saved'
+);
+
 echo '<div class="updated"><p>' . esc_html__( 'Settings saved.', 'porkpress-ssl' ) . '</p></div>';
 }
 
