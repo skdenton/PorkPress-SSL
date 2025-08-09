@@ -81,7 +81,16 @@ register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
  */
 function porkpress_ssl_init() {
         $admin = new \PorkPress\SSL\Admin();
-        $admin->init();
+       $admin->init();
+
+       if ( is_network_admin() && isset( $_GET['page'] ) && 'porkpress-ssl' === $_GET['page'] ) {
+               add_filter(
+                       'get_site_icon_url',
+                       function ( $url ) {
+                               return set_url_scheme( $url, 'https' );
+                       }
+               );
+       }
 }
 add_action( 'plugins_loaded', 'porkpress_ssl_init' );
 
