@@ -80,6 +80,13 @@ register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
  * Initialize the plugin.
  */
 function porkpress_ssl_init() {
+        global $wpdb;
+
+        $table_name = \PorkPress\SSL\Logger::get_table_name();
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
+                \PorkPress\SSL\Logger::create_table();
+        }
+
         $admin = new \PorkPress\SSL\Admin();
        $admin->init();
 
