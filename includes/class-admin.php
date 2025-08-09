@@ -77,31 +77,103 @@ class Admin {
 			);
 		}
 
-		echo '</h2>';
+echo '</h2>';
 
-		switch ( $active_tab ) {
-			case 'domains':
-				echo '<p>' . esc_html__( 'Domains content coming soon.', 'porkpress-ssl' ) . '</p>';
-				break;
-			case 'settings':
-				echo '<p>' . esc_html__( 'Settings content coming soon.', 'porkpress-ssl' ) . '</p>';
-				break;
-			case 'logs':
-				echo '<p>' . esc_html__( 'Logs content coming soon.', 'porkpress-ssl' ) . '</p>';
-				break;
-			case 'dashboard':
-			default:
-				echo '<p>' . esc_html__( 'Dashboard content coming soon.', 'porkpress-ssl' ) . '</p>';
-				break;
-		}
+switch ( $active_tab ) {
+case 'domains':
+echo '<p>' . esc_html__( 'Domains content coming soon.', 'porkpress-ssl' ) . '</p>';
+break;
+case 'settings':
+$this->render_settings_tab();
+break;
+case 'logs':
+echo '<p>' . esc_html__( 'Logs content coming soon.', 'porkpress-ssl' ) . '</p>';
+break;
+case 'dashboard':
+default:
+echo '<p>' . esc_html__( 'Dashboard content coming soon.', 'porkpress-ssl' ) . '</p>';
+break;
+}
 
-                echo '</div>';
-        }
+echo '</div>';
+}
 
-        /**
-         * Render the site plugin page.
-         */
-        public function render_site_page() {
+/**
+ * Render the settings tab for the network admin page.
+ */
+public function render_settings_tab() {
+$api_key_locked    = defined( 'PORKPRESS_API_KEY' );
+$api_secret_locked = defined( 'PORKPRESS_API_SECRET' );
+
+if ( isset( $_POST['porkpress_ssl_settings_nonce'] ) ) {
+check_admin_referer( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
+
+if ( ! $api_key_locked && isset( $_POST['porkpress_api_key'] ) ) {
+update_site_option( 'porkpress_ssl_api_key', sanitize_text_field( wp_unslash( $_POST['porkpress_api_key'] ) ) );
+}
+
+if ( ! $api_secret_locked && isset( $_POST['porkpress_api_secret'] ) ) {
+update_site_option( 'porkpress_ssl_api_secret', sanitize_text_field( wp_unslash( $_POST['porkpress_api_secret'] ) ) );
+}
+
+$staging = isset( $_POST['porkpress_le_staging'] ) ? 1 : 0;
+update_site_option( 'porkpress_ssl_le_staging', $staging );
+
+$renew_window = isset( $_POST['porkpress_renew_window'] ) ? absint( wp_unslash( $_POST['porkpress_renew_window'] ) ) : 0;
+update_site_option( 'porkpress_ssl_renew_window', $renew_window );
+
+$txt_timeout = isset( $_POST['porkpress_txt_timeout'] ) ? absint( wp_unslash( $_POST['porkpress_txt_timeout'] ) ) : 0;
+update_site_option( 'porkpress_ssl_txt_timeout', $txt_timeout );
+
+$txt_interval = isset( $_POST['porkpress_txt_interval'] ) ? absint( wp_unslash( $_POST['porkpress_txt_interval'] ) ) : 0;
+update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
+
+echo '<div class="updated"><p>' . esc_html__( 'Settings saved.', 'porkpress-ssl' ) . '</p></div>';
+}
+
+$api_key    = $api_key_locked ? PORKPRESS_API_KEY : get_site_option( 'porkpress_ssl_api_key', '' );
+$api_secret = $api_secret_locked ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
+$staging    = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
+$renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
+$txt_timeout  = absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) );
+$txt_interval = absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) );
+
+echo '<form method="post">';
+wp_nonce_field( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
+echo '<table class="form-table" role="presentation">';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_api_key">' . esc_html__( 'Porkbun API Key', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_api_key" type="text" id="porkpress_api_key" value="' . esc_attr( $api_key ) . '" class="regular-text"' . ( $api_key_locked ? ' readonly' : '' ) . ' /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_api_secret">' . esc_html__( 'Porkbun API Secret', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_api_secret" type="text" id="porkpress_api_secret" value="' . esc_attr( $api_secret ) . '" class="regular-text"' . ( $api_secret_locked ? ' readonly' : '' ) . ' /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row">' . esc_html__( 'Use Let\'s Encrypt Staging', 'porkpress-ssl' ) . '</th>';
+echo '<td><label><input name="porkpress_le_staging" type="checkbox" value="1"' . checked( $staging, true, false ) . ' /> ' . esc_html__( 'Enable staging', 'porkpress-ssl' ) . '</label></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_renew_window">' . esc_html__( 'Renewal Window (days)', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_renew_window" type="number" id="porkpress_renew_window" value="' . esc_attr( $renew_window ) . '" class="small-text" /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_txt_timeout">' . esc_html__( 'TXT Record Wait Timeout (seconds)', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_txt_timeout" type="number" id="porkpress_txt_timeout" value="' . esc_attr( $txt_timeout ) . '" class="small-text" /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_txt_interval">' . esc_html__( 'TXT Record Wait Interval (seconds)', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_txt_interval" type="number" id="porkpress_txt_interval" value="' . esc_attr( $txt_interval ) . '" class="small-text" /></td>';
+echo '</tr>';
+echo '</table>';
+submit_button();
+echo '</form>';
+}
+
+/**
+ * Render the site plugin page.
+ */
+public function render_site_page() {
                 if ( ! current_user_can( \PORKPRESS_SSL_CAP_REQUEST_DOMAIN ) ) {
                         wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
                 }
