@@ -114,25 +114,4 @@ class Domain_Service {
                return true;
        }
 
-       /**
-        * Disable a domain in Porkbun.
-        *
-        * @param string $domain Domain name.
-        *
-        * @return array|Porkbun_Client_Error
-        */
-       public function disable_domain( string $domain ) {
-               return $this->client->disableDomain( $domain );
-       }
-
-       /**
-        * Remove a domain from Porkbun.
-        *
-        * @param string $domain Domain name.
-        *
-        * @return array|Porkbun_Client_Error
-        */
-       public function remove_domain( string $domain ) {
-               return $this->client->deleteDomain( $domain );
-       }
 }

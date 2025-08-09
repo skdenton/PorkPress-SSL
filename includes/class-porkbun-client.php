@@ -83,23 +83,9 @@ class Porkbun_Client {
                 ] );
         }
 
-       /**
-        * Disable a domain.
-        */
-       public function disableDomain( string $domain ) {
-               return $this->request( "domain/disableDomain/{$domain}", [] );
-       }
-
-       /**
-        * Delete a domain from Porkbun.
-        */
-       public function deleteDomain( string $domain ) {
-               return $this->request( "domain/deleteDomain/{$domain}", [] );
-       }
-
 	/**
 	 * Retrieve DNS records for a domain.
-	 */
+ */
 	public function getRecords( string $domain ) {
 		return $this->request( "dns/retrieve/{$domain}", [] );
 	}

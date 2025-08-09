@@ -214,8 +214,6 @@ class Admin {
                echo '<select name="bulk_action"><option value="">' . esc_html__( 'Bulk actions', 'porkpress-ssl' ) . '</option>';
                echo '<option value="attach">' . esc_html__( 'Attach to site', 'porkpress-ssl' ) . '</option>';
                echo '<option value="detach">' . esc_html__( 'Detach from site', 'porkpress-ssl' ) . '</option>';
-               echo '<option value="disable">' . esc_html__( 'Disable in Porkbun', 'porkpress-ssl' ) . '</option>';
-               echo '<option value="remove">' . esc_html__( 'Remove from Porkbun', 'porkpress-ssl' ) . '</option>';
                echo '</select> ';
                echo '<input type="number" name="site_id" class="small-text" placeholder="' . esc_attr__( 'Site ID', 'porkpress-ssl' ) . '" /> ';
                submit_button( __( 'Apply', 'porkpress-ssl' ), 'secondary', 'apply', false );
@@ -247,12 +245,6 @@ class Admin {
                                break;
                        case 'detach':
                                $result = $service->detach_from_site( $domain );
-                               break;
-                       case 'disable':
-                               $result = $service->disable_domain( $domain );
-                               break;
-                       case 'remove':
-                               $result = $service->remove_domain( $domain );
                                break;
                        default:
                                wp_send_json_error( 'unknown_action' );
