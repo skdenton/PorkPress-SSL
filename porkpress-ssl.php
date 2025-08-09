@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       PorkPress SSL
  * Description:       Manage SSL certificates via Porkbun.
- * Version:           0.1.7
+ * Version:           0.1.8
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Network:           true
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const PORKPRESS_SSL_VERSION = '0.1.7';
+const PORKPRESS_SSL_VERSION = '0.1.8';
 const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
 const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
 require_once __DIR__ . '/includes/class-admin.php';
@@ -33,7 +33,8 @@ require_once __DIR__ . '/includes/class-reconciler.php';
  * Activation hook callback.
  */
 function porkpress_ssl_activate() {
-        \PorkPress\SSL\Logger::create_table();
+       \PorkPress\SSL\Logger::create_table();
+       \PorkPress\SSL\Domain_Service::create_alias_table();
         // Grant request capability to site administrators on all sites.
         if ( is_multisite() ) {
                 foreach ( get_sites() as $site ) {
@@ -80,12 +81,17 @@ register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
  * Initialize the plugin.
  */
 function porkpress_ssl_init() {
-        global $wpdb;
+       global $wpdb;
 
-        $table_name = \PorkPress\SSL\Logger::get_table_name();
-        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
-                \PorkPress\SSL\Logger::create_table();
-        }
+       $table_name = \PorkPress\SSL\Logger::get_table_name();
+       if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
+               \PorkPress\SSL\Logger::create_table();
+       }
+
+       $alias_table = \PorkPress\SSL\Domain_Service::get_alias_table_name();
+       if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $alias_table ) ) !== $alias_table ) {
+               \PorkPress\SSL\Domain_Service::create_alias_table();
+       }
 
         $admin = new \PorkPress\SSL\Admin();
        $admin->init();
