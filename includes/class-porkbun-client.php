@@ -157,9 +157,16 @@ class Porkbun_Client {
 				continue;
 			}
 
-			return new Porkbun_Client_Error( 'http_error', 'HTTP error', $status, $body );
-		}
-	}
+                        $data    = json_decode( $body, true );
+                        $message = $body;
+                        if ( is_array( $data ) && isset( $data['message'] ) ) {
+                                $message = $data['message'];
+                        }
+                        $message = sprintf( 'HTTP %d: %s', $status, $message );
+
+                        return new Porkbun_Client_Error( 'http_error', $message, $status, $data ?? $body );
+                }
+        }
 
 	/**
 	 * Low-level HTTP request using cURL.

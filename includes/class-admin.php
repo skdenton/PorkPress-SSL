@@ -113,7 +113,11 @@ class Admin {
                 $service = new Domain_Service();
                 $result  = $service->list_domains();
                 if ( $result instanceof Porkbun_Client_Error ) {
-                        printf( '<div class="error"><p>%s</p></div>', esc_html( $result->message ) );
+                        $message = $result->message;
+                        if ( $result->status ) {
+                                $message = sprintf( 'HTTP %d: %s', $result->status, $message );
+                        }
+                        printf( '<div class="error"><p>%s</p></div>', esc_html( $message ) );
                         return;
                 }
 
