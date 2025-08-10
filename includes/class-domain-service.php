@@ -97,6 +97,64 @@ class Domain_Service {
        }
 
        /**
+        * Create a new site and attach a domain as its primary alias.
+        *
+        * @param string $domain       Domain to attach.
+        * @param string $title        Site title.
+        * @param string $admin_email  Administrator email for the site.
+        * @param string $template     Optional template/locale for the site.
+        *
+        * @return int|\WP_Error Site ID on success or WP_Error on failure.
+        */
+       public function create_site( string $domain, string $title, string $admin_email, string $template = '' ) {
+               \PorkPress\SSL\Logger::info(
+                       'create_site_start',
+                       array(
+                               'domain'      => $domain,
+                               'title'       => $title,
+                               'admin_email' => $admin_email,
+                               'template'    => $template,
+                       )
+               );
+
+               $user_id = email_exists( $admin_email );
+               if ( ! $user_id ) {
+                       $username = sanitize_user( current( explode( '@', $admin_email ) ), true );
+                       $password = wp_generate_password();
+                       $user_id  = wp_create_user( $username, $password, $admin_email );
+                       if ( is_wp_error( $user_id ) ) {
+                               \PorkPress\SSL\Logger::error( 'create_user', array( 'email' => $admin_email ), $user_id->get_error_message() );
+                               return $user_id;
+                       }
+                       \PorkPress\SSL\Logger::info( 'create_user', array( 'user_id' => $user_id, 'email' => $admin_email ), 'created' );
+               } else {
+                       \PorkPress\SSL\Logger::info( 'create_user', array( 'user_id' => $user_id, 'email' => $admin_email ), 'existing' );
+               }
+
+               $site_id = wpmu_create_blog( $domain, '/', $title, $user_id, array( 'template' => $template ), get_current_network_id() );
+               if ( is_wp_error( $site_id ) ) {
+                       \PorkPress\SSL\Logger::error( 'create_site', array( 'domain' => $domain ), $site_id->get_error_message() );
+                       return $site_id;
+               }
+
+               \PorkPress\SSL\Logger::info( 'create_site', array( 'domain' => $domain, 'site_id' => $site_id ), 'created' );
+
+               if ( function_exists( 'update_site_meta' ) ) {
+                       update_site_meta( $site_id, 'porkpress_domain', $domain );
+               }
+
+               $this->add_alias( $site_id, $domain, true, 'active' );
+               \PorkPress\SSL\Logger::info( 'set_primary_domain', array( 'site_id' => $site_id, 'domain' => $domain ), 'alias_created' );
+
+               $url = 'https://' . $domain;
+               update_blog_option( $site_id, 'siteurl', $url );
+               update_blog_option( $site_id, 'home', $url );
+               \PorkPress\SSL\Logger::info( 'update_siteurl_home', array( 'site_id' => $site_id, 'url' => $url ), 'updated' );
+
+               return $site_id;
+       }
+
+       /**
         * Detach a domain from any site.
         *
         * @param string $domain Domain name.
