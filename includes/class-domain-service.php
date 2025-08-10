@@ -325,4 +325,29 @@ KEY domain (domain)
                );
        }
 
+       /**
+        * Set the primary alias for a site.
+        *
+        * @param int    $site_id Site ID.
+        * @param string $domain  Domain to set as primary.
+        *
+        * @return bool True on success, false on failure.
+        */
+       public function set_primary_alias( int $site_id, string $domain ): bool {
+               global $wpdb;
+
+               $table  = self::get_alias_table_name();
+               $domain = strtolower( sanitize_text_field( $domain ) );
+
+               $result = $wpdb->query(
+                       $wpdb->prepare(
+                               "UPDATE {$table} SET is_primary = CASE WHEN domain = %s THEN 1 ELSE 0 END WHERE site_id = %d",
+                               $domain,
+                               $site_id
+                       )
+               );
+
+               return false !== $result;
+       }
+
 }

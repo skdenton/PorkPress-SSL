@@ -18,10 +18,12 @@ class Admin {
          */
         public function init() {
                 add_action( 'network_admin_menu', array( $this, 'register_network_menu' ) );
+                add_action( 'network_admin_menu', array( $this, 'register_site_alias_page' ) );
                 add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
                add_action( 'wp_ajax_porkpress_ssl_bulk_action', array( $this, 'handle_bulk_action' ) );
                add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                add_action( 'network_admin_notices', array( $this, 'sunrise_notice' ) );
+               add_filter( 'network_edit_site_nav_links', array( $this, 'add_site_nav_link' ) );
         }
 
        /**
@@ -442,6 +444,170 @@ echo '</form>';
 
                 echo '</tbody></table>';
         }
+
+       /**
+        * Register the site alias management page.
+        */
+       public function register_site_alias_page() {
+               add_submenu_page(
+                       null,
+                       __( 'Domain Aliases', 'porkpress-ssl' ),
+                       __( 'Domain Aliases', 'porkpress-ssl' ),
+                       \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS,
+                       'porkpress-site-aliases',
+                       array( $this, 'render_site_alias_page' )
+               );
+       }
+
+       /**
+        * Add Domains tab to the site edit screen.
+        *
+        * @param array $links Existing links.
+        *
+        * @return array
+        */
+       public function add_site_nav_link( array $links ): array {
+               $links['porkpress-site-aliases'] = array(
+                       'label' => __( 'Domains', 'porkpress-ssl' ),
+                       'url'   => 'admin.php?page=porkpress-site-aliases',
+                       'cap'   => \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS,
+               );
+
+               return $links;
+       }
+
+       /**
+        * Render the site alias management page.
+        */
+       public function render_site_alias_page() {
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
+               }
+
+               $site_id = isset( $_GET['id'] ) ? (int) $_GET['id'] : 0;
+               if ( ! $site_id ) {
+                       wp_die( esc_html__( 'Invalid site ID.', 'porkpress-ssl' ) );
+               }
+
+               $service = new Domain_Service();
+
+               $redirect = add_query_arg(
+                       array(
+                               'page' => 'porkpress-site-aliases',
+                               'id'   => $site_id,
+                       ),
+                       network_admin_url( 'admin.php' )
+               );
+
+               if ( isset( $_POST['porkpress_add_alias'] ) ) {
+                       check_admin_referer( 'porkpress_add_alias' );
+                       $domain = sanitize_text_field( wp_unslash( $_POST['alias_domain'] ) );
+                       if ( $domain && empty( $service->get_aliases( null, $domain ) ) ) {
+                               $is_primary = empty( $service->get_aliases( $site_id ) );
+                               $service->add_alias( $site_id, $domain, $is_primary );
+                               wp_safe_redirect( add_query_arg( 'pp_msg', 'added', $redirect ) );
+                               exit;
+                       } else {
+                               wp_safe_redirect( add_query_arg( 'pp_msg', 'exists', $redirect ) );
+                               exit;
+                       }
+               }
+
+               if ( isset( $_GET['make_primary'] ) ) {
+                       $domain = sanitize_text_field( wp_unslash( $_GET['make_primary'] ) );
+                       check_admin_referer( 'porkpress_make_primary_' . $domain );
+                       $service->set_primary_alias( $site_id, $domain );
+                       wp_safe_redirect( add_query_arg( 'pp_msg', 'primary', $redirect ) );
+                       exit;
+               }
+
+               if ( isset( $_GET['delete_alias'] ) ) {
+                       $domain = sanitize_text_field( wp_unslash( $_GET['delete_alias'] ) );
+                       check_admin_referer( 'porkpress_delete_alias_' . $domain );
+                       $aliases   = $service->get_aliases( $site_id );
+                       $can_delete = true;
+                       foreach ( $aliases as $alias ) {
+                               if ( $alias['domain'] === $domain ) {
+                                       if ( $alias['is_primary'] ) {
+                                               $can_delete = false;
+                                       }
+                               }
+                       }
+                       if ( $can_delete ) {
+                               $service->delete_alias( $site_id, $domain );
+                               wp_safe_redirect( add_query_arg( 'pp_msg', 'deleted', $redirect ) );
+                               exit;
+                       } else {
+                               wp_safe_redirect( add_query_arg( 'pp_msg', 'nodelete', $redirect ) );
+                               exit;
+                       }
+               }
+
+               $message = isset( $_GET['pp_msg'] ) ? sanitize_key( wp_unslash( $_GET['pp_msg'] ) ) : '';
+
+               $aliases = $service->get_aliases( $site_id );
+
+               echo '<div class="wrap">';
+               echo '<h1>' . esc_html__( 'Domain Aliases', 'porkpress-ssl' ) . '</h1>';
+
+               if ( $message ) {
+                       $text = '';
+                       switch ( $message ) {
+                               case 'added':
+                                       $text = __( 'Alias added.', 'porkpress-ssl' );
+                                       break;
+                               case 'deleted':
+                                       $text = __( 'Alias removed.', 'porkpress-ssl' );
+                                       break;
+                               case 'primary':
+                                       $text = __( 'Primary alias updated.', 'porkpress-ssl' );
+                                       break;
+                               case 'exists':
+                                       $text = __( 'Alias already exists.', 'porkpress-ssl' );
+                                       break;
+                               case 'nodelete':
+                                       $text = __( 'Cannot remove the primary alias.', 'porkpress-ssl' );
+                                       break;
+                       }
+                       if ( $text ) {
+                               printf( '<div class="notice notice-info"><p>%s</p></div>', esc_html( $text ) );
+                       }
+               }
+
+               echo '<table class="widefat fixed striped">';
+               echo '<thead><tr><th>' . esc_html__( 'Domain', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Primary', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
+
+               if ( empty( $aliases ) ) {
+                       echo '<tr><td colspan="3">' . esc_html__( 'No aliases found.', 'porkpress-ssl' ) . '</td></tr>';
+               } else {
+                       foreach ( $aliases as $alias ) {
+                               echo '<tr>';
+                               echo '<td>' . esc_html( $alias['domain'] ) . '</td>';
+                               echo '<td>' . ( $alias['is_primary'] ? '&#10003;' : '' ) . '</td>';
+                               echo '<td>';
+                               if ( ! $alias['is_primary'] ) {
+                                       $primary_url = wp_nonce_url( add_query_arg( 'make_primary', rawurlencode( $alias['domain'] ), $redirect ), 'porkpress_make_primary_' . $alias['domain'] );
+                                       $delete_url  = wp_nonce_url( add_query_arg( 'delete_alias', rawurlencode( $alias['domain'] ), $redirect ), 'porkpress_delete_alias_' . $alias['domain'] );
+                                       echo '<a href="' . esc_url( $primary_url ) . '">' . esc_html__( 'Set Primary', 'porkpress-ssl' ) . '</a> | ';
+                                       echo '<a href="' . esc_url( $delete_url ) . '" onclick="return confirm(\'' . esc_js( __( 'Are you sure?', 'porkpress-ssl' ) ) . '\');">' . esc_html__( 'Remove', 'porkpress-ssl' ) . '</a>';
+                               } else {
+                                       echo '&#8212;';
+                               }
+                               echo '</td>';
+                               echo '</tr>';
+                       }
+               }
+
+               echo '</tbody></table>';
+
+               echo '<h2>' . esc_html__( 'Add Alias', 'porkpress-ssl' ) . '</h2>';
+               echo '<form method="post">';
+               wp_nonce_field( 'porkpress_add_alias' );
+               echo '<input type="text" name="alias_domain" class="regular-text" /> ';
+               submit_button( __( 'Add', 'porkpress-ssl' ), 'secondary', 'porkpress_add_alias', false );
+               echo '</form>';
+               echo '</div>';
+       }
 
 /**
  * Render the site plugin page.
