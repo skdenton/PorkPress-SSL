@@ -5,6 +5,11 @@ jQuery(function($){
         var action = $('select[name="bulk_action"]').val();
         var site = $('input[name="site_id"]').val();
         if(!domains.length || !action){return;}
+        var override = '';
+        if(action === 'detach'){
+            override = prompt('Type CONFIRM to detach selected domains');
+            if(override !== 'CONFIRM'){return;}
+        }
         var total = domains.length, processed = 0;
         var $progress = $('#porkpress-domain-progress');
         $progress.text('0/'+total);
@@ -16,7 +21,8 @@ jQuery(function($){
                 nonce: porkpressBulk.nonce,
                 domain: domain,
                 bulk_action: action,
-                site_id: site
+                site_id: site,
+                override: override
             }, function(resp){
                 processed++;
                 if(!resp.success){console.error('Action failed', domain, resp.data);}
