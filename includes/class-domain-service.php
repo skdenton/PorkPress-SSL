@@ -388,7 +388,14 @@ KEY domain (domain)
                        'status'     => sanitize_text_field( $status ),
                );
 
-               return false !== $wpdb->insert( $table, $data, array( '%d', '%s', '%d', '%s' ) );
+               $result = $wpdb->insert( $table, $data, array( '%d', '%s', '%d', '%s' ) );
+
+               if ( false !== $result ) {
+                       SSL_Service::queue_issuance( $site_id );
+                       return true;
+               }
+
+               return false;
        }
 
        /**
@@ -454,7 +461,7 @@ KEY domain (domain)
                        return false;
                }
 
-               return false !== $wpdb->update(
+               $result = $wpdb->update(
                        self::get_alias_table_name(),
                        $fields,
                        array(
@@ -464,6 +471,13 @@ KEY domain (domain)
                        $formats,
                        array( '%d', '%s' )
                );
+
+               if ( false !== $result ) {
+                       SSL_Service::queue_issuance( $site_id );
+                       return true;
+               }
+
+               return false;
        }
 
        /**
@@ -477,7 +491,7 @@ KEY domain (domain)
        public function delete_alias( int $site_id, string $domain ): bool {
                global $wpdb;
 
-               return false !== $wpdb->delete(
+               $result = $wpdb->delete(
                        self::get_alias_table_name(),
                        array(
                                'site_id' => $site_id,
@@ -485,6 +499,13 @@ KEY domain (domain)
                        ),
                        array( '%d', '%s' )
                );
+
+               if ( false !== $result ) {
+                       SSL_Service::queue_issuance( $site_id );
+                       return true;
+               }
+
+               return false;
        }
 
        /**

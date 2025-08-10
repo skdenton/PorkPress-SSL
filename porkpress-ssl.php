@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       PorkPress SSL
  * Description:       Manage SSL certificates via Porkbun.
- * Version:           0.1.19
+ * Version:           0.1.20
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Network:           true
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const PORKPRESS_SSL_VERSION = '0.1.19';
+const PORKPRESS_SSL_VERSION = '0.1.20';
 const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
 const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
 
@@ -144,6 +144,8 @@ add_action( 'porkpress_ssl_reconcile', function () {
                );
        }
 } );
+
+add_action( 'porkpress_ssl_run_issuance', array( '\\PorkPress\\SSL\\SSL_Service', 'run_queue' ) );
 
 /**
  * Map meta capabilities for the plugin.
