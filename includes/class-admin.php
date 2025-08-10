@@ -455,10 +455,12 @@ update_site_option( 'porkpress_ssl_le_staging', $staging );
 $renew_window = isset( $_POST['porkpress_renew_window'] ) ? absint( wp_unslash( $_POST['porkpress_renew_window'] ) ) : 0;
 update_site_option( 'porkpress_ssl_renew_window', $renew_window );
 
-$txt_timeout = isset( $_POST['porkpress_txt_timeout'] ) ? absint( wp_unslash( $_POST['porkpress_txt_timeout'] ) ) : 0;
+$raw_txt_timeout = isset( $_POST['porkpress_txt_timeout'] ) ? absint( wp_unslash( $_POST['porkpress_txt_timeout'] ) ) : 0;
+$txt_timeout     = max( 1, $raw_txt_timeout );
 update_site_option( 'porkpress_ssl_txt_timeout', $txt_timeout );
 
-$txt_interval = isset( $_POST['porkpress_txt_interval'] ) ? absint( wp_unslash( $_POST['porkpress_txt_interval'] ) ) : 0;
+$raw_txt_interval = isset( $_POST['porkpress_txt_interval'] ) ? absint( wp_unslash( $_POST['porkpress_txt_interval'] ) ) : 0;
+$txt_interval     = max( 1, $raw_txt_interval );
 update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
 
             $auto_reconcile = isset( $_POST['porkpress_auto_reconcile'] ) ? 1 : 0;
@@ -485,15 +487,19 @@ update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
 
             \PorkPress\SSL\Renewal_Service::maybe_schedule( true );
 
-echo '<div class="updated"><p>' . esc_html__( 'Settings saved.', 'porkpress-ssl' ) . '</p></div>';
+            if ( $txt_timeout !== $raw_txt_timeout || $txt_interval !== $raw_txt_interval ) {
+                    echo '<div class="notice notice-warning"><p>' . esc_html__( 'TXT record wait values must be at least 1 second. Submitted values have been adjusted.', 'porkpress-ssl' ) . '</p></div>';
+            }
+
+            echo '<div class="updated"><p>' . esc_html__( 'Settings saved.', 'porkpress-ssl' ) . '</p></div>';
 }
 
 $api_key    = $api_key_locked ? PORKPRESS_API_KEY : get_site_option( 'porkpress_ssl_api_key', '' );
 $api_secret = $api_secret_locked ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
 $staging    = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 $renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
-$txt_timeout  = absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) );
-$txt_interval = absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) );
+$txt_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) ) );
+$txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) ) );
         $auto_reconcile = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
         $dry_run        = (bool) get_site_option( 'porkpress_ssl_dry_run', 0 );
 
