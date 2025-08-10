@@ -250,13 +250,18 @@ class Admin {
                        if ( in_array( $export, array( 'mapping-csv', 'mapping-json' ), true ) ) {
                                $svc     = new Domain_Service();
                                $aliases = $svc->get_aliases();
+                               foreach ( $aliases as &$alias ) {
+                                       $site               = get_site( (int) $alias['site_id'] );
+                                       $alias['site_name'] = $site ? get_blog_option( $site->id, 'blogname' ) : '';
+                               }
+                               unset( $alias );
                                if ( 'mapping-csv' === $export ) {
                                        header( 'Content-Type: text/csv' );
                                        header( 'Content-Disposition: attachment; filename="porkpress-mapping.csv"' );
                                        $fh = fopen( 'php://output', 'w' );
-                                       fputcsv( $fh, array( 'site_id', 'domain', 'is_primary', 'status' ) );
+                                       fputcsv( $fh, array( 'site_id', 'site_name', 'domain', 'is_primary', 'status' ) );
                                        foreach ( $aliases as $alias ) {
-                                               fputcsv( $fh, array( $alias['site_id'], $alias['domain'], $alias['is_primary'], $alias['status'] ) );
+                                               fputcsv( $fh, array( $alias['site_id'], $alias['site_name'], $alias['domain'], $alias['is_primary'], $alias['status'] ) );
                                        }
                                        exit;
                                }
@@ -338,6 +343,12 @@ class Admin {
                submit_button( __( 'Run now', 'porkpress-ssl' ), 'secondary', 'issue_now', false );
                echo '</form>';
 
+               $aliases   = $service->get_aliases();
+               $alias_map = array();
+               foreach ( $aliases as $alias ) {
+                       $alias_map[ strtolower( $alias['domain'] ) ] = $alias;
+               }
+
                $result = $service->list_domains();
                 if ( $result instanceof Porkbun_Client_Error ) {
                         $message = $result->message;
@@ -404,12 +415,13 @@ class Admin {
                echo '<thead><tr>';
                echo '<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all" /></td>';
                echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Site', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
                echo '</tr></thead><tbody>';
 
                 if ( empty( $domains ) ) {
-               echo '<tr><td colspan="4">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+               echo '<tr><td colspan="5">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
                 } else {
                         foreach ( $domains as $domain ) {
                                $name       = $domain['domain'] ?? $domain['name'] ?? '';
@@ -419,6 +431,18 @@ class Admin {
                                echo '<tr>';
                                echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
                                echo '<td>' . esc_html( $name ) . '</td>';
+                               $site_cell = '&mdash;';
+                               $key       = strtolower( $name );
+                               if ( isset( $alias_map[ $key ] ) ) {
+                                       $site_id = (int) $alias_map[ $key ]['site_id'];
+                                       $site    = get_site( $site_id );
+                                       if ( $site ) {
+                                               $site_name = get_blog_option( $site_id, 'blogname' );
+                                               $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
+                                               $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
+                                       }
+                               }
+                               echo '<td>' . $site_cell . '</td>';
                                echo '<td>' . esc_html( $expiry ) . '</td>';
                                echo '<td>' . esc_html( $dns_status ) . '</td>';
                                echo '</tr>';
