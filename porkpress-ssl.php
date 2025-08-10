@@ -24,6 +24,7 @@ const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
 const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
 require_once __DIR__ . '/includes/class-admin.php';
 require_once __DIR__ . '/includes/class-porkbun-client.php';
+require_once __DIR__ . '/includes/class-porkbun-client-dryrun.php';
 require_once __DIR__ . '/includes/class-domain-service.php';
 require_once __DIR__ . '/includes/class-ssl-service.php';
 require_once __DIR__ . '/includes/class-logger.php';

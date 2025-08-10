@@ -130,6 +130,40 @@ class Admin {
                 $expiry_window = isset( $_GET['expiry'] ) ? absint( wp_unslash( $_GET['expiry'] ) ) : 0;
 
                $service = new Domain_Service();
+
+               $simulate_steps = '';
+               if ( isset( $_POST['porkpress_ssl_simulate_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_simulate_nonce'] ), 'porkpress_ssl_simulate' ) ) {
+                       $dry_service = new Domain_Service( null, true );
+                       $reconciler  = new Reconciler( $dry_service );
+                       $drift       = $reconciler->reconcile_all( false );
+                       $steps       = array();
+                       foreach ( $drift['missing_aliases'] as $item ) {
+                               $steps[] = sprintf( __( 'Would add alias %1$s to site %2$d', 'porkpress-ssl' ), $item['domain'], $item['site_id'] );
+                       }
+                       foreach ( $drift['stray_aliases'] as $item ) {
+                               $steps[] = sprintf( __( 'Would remove alias %1$s from site %2$d', 'porkpress-ssl' ), $item['domain'], $item['site_id'] );
+                       }
+                       foreach ( $drift['disabled_sites'] as $item ) {
+                               $steps[] = sprintf( __( 'Would unarchive site %2$d (domain %1$s)', 'porkpress-ssl' ), $item['domain'], $item['site_id'] );
+                       }
+                       $simulate_steps  = '<div class="notice notice-info"><p>' . esc_html__( 'Simulation results (no changes applied):', 'porkpress-ssl' ) . '</p>';
+                       if ( empty( $steps ) ) {
+                               $simulate_steps .= '<p>' . esc_html__( 'No actions required.', 'porkpress-ssl' ) . '</p>';
+                       } else {
+                               $simulate_steps .= '<ul><li>' . implode( '</li><li>', array_map( 'esc_html', $steps ) ) . '</li></ul>';
+                       }
+                       $simulate_steps .= '</div>';
+               }
+
+               echo '<form method="post" style="margin-bottom:1em;">';
+               wp_nonce_field( 'porkpress_ssl_simulate', 'porkpress_ssl_simulate_nonce' );
+               submit_button( __( 'Simulate', 'porkpress-ssl' ), 'secondary', 'simulate_now', false );
+               echo '</form>';
+
+               if ( $simulate_steps ) {
+                       echo $simulate_steps; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+               }
+
                if ( ! $service->has_credentials() ) {
                        printf(
                                '<div class="error"><p>%s</p></div>',
@@ -309,8 +343,8 @@ public function render_settings_tab() {
 $api_key_locked    = defined( 'PORKPRESS_API_KEY' );
 $api_secret_locked = defined( 'PORKPRESS_API_SECRET' );
 
-if ( isset( $_POST['porkpress_ssl_settings_nonce'] ) ) {
-check_admin_referer( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
+        if ( isset( $_POST['porkpress_ssl_settings_nonce'] ) ) {
+            check_admin_referer( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
 
 if ( ! $api_key_locked && isset( $_POST['porkpress_api_key'] ) ) {
 update_site_option( 'porkpress_ssl_api_key', sanitize_text_field( wp_unslash( $_POST['porkpress_api_key'] ) ) );
@@ -332,23 +366,27 @@ update_site_option( 'porkpress_ssl_txt_timeout', $txt_timeout );
 $txt_interval = isset( $_POST['porkpress_txt_interval'] ) ? absint( wp_unslash( $_POST['porkpress_txt_interval'] ) ) : 0;
 update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
 
-$auto_reconcile = isset( $_POST['porkpress_auto_reconcile'] ) ? 1 : 0;
-update_site_option( 'porkpress_ssl_auto_reconcile', $auto_reconcile );
+            $auto_reconcile = isset( $_POST['porkpress_auto_reconcile'] ) ? 1 : 0;
+            update_site_option( 'porkpress_ssl_auto_reconcile', $auto_reconcile );
+
+            $dry_run = isset( $_POST['porkpress_dry_run'] ) ? 1 : 0;
+            update_site_option( 'porkpress_ssl_dry_run', $dry_run );
 
 // Log the settings update without exposing sensitive values.
-Logger::info(
-    'update_settings',
-    array(
-        'api_key_changed'    => ! $api_key_locked && isset( $_POST['porkpress_api_key'] ),
-        'api_secret_changed' => ! $api_secret_locked && isset( $_POST['porkpress_api_secret'] ),
-        'le_staging'         => (bool) $staging,
-        'renew_window'       => $renew_window,
-        'txt_timeout'        => $txt_timeout,
-        'txt_interval'       => $txt_interval,
-        'auto_reconcile'     => (bool) $auto_reconcile,
-    ),
-    'Settings saved'
-);
+            Logger::info(
+                'update_settings',
+                array(
+                    'api_key_changed'    => ! $api_key_locked && isset( $_POST['porkpress_api_key'] ),
+                    'api_secret_changed' => ! $api_secret_locked && isset( $_POST['porkpress_api_secret'] ),
+                    'le_staging'         => (bool) $staging,
+                    'renew_window'       => $renew_window,
+                    'txt_timeout'        => $txt_timeout,
+                    'txt_interval'       => $txt_interval,
+                    'auto_reconcile'     => (bool) $auto_reconcile,
+                    'dry_run'            => (bool) $dry_run,
+                ),
+                'Settings saved'
+            );
 
 echo '<div class="updated"><p>' . esc_html__( 'Settings saved.', 'porkpress-ssl' ) . '</p></div>';
 }
@@ -359,7 +397,8 @@ $staging    = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 $renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
 $txt_timeout  = absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) );
 $txt_interval = absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) );
-$auto_reconcile = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
+        $auto_reconcile = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
+        $dry_run        = (bool) get_site_option( 'porkpress_ssl_dry_run', 0 );
 
 echo '<form method="post">';
 wp_nonce_field( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
@@ -389,9 +428,13 @@ echo '<th scope="row"><label for="porkpress_txt_interval">' . esc_html__( 'TXT R
 echo '<td><input name="porkpress_txt_interval" type="number" id="porkpress_txt_interval" value="' . esc_attr( $txt_interval ) . '" class="small-text" /></td>';
 echo '</tr>';
 echo '<tr>';
-echo '<th scope="row">' . esc_html__( 'Automatic Reconciliation', 'porkpress-ssl' ) . '</th>';
-echo '<td><label><input name="porkpress_auto_reconcile" type="checkbox" value="1"' . checked( $auto_reconcile, true, false ) . ' /> ' . esc_html__( 'Enable automatic drift remediation', 'porkpress-ssl' ) . '</label></td>';
-echo '</tr>';
+        echo '<th scope="row">' . esc_html__( 'Automatic Reconciliation', 'porkpress-ssl' ) . '</th>';
+        echo '<td><label><input name="porkpress_auto_reconcile" type="checkbox" value="1"' . checked( $auto_reconcile, true, false ) . ' /> ' . esc_html__( 'Enable automatic drift remediation', 'porkpress-ssl' ) . '</label></td>';
+        echo '</tr>';
+        echo '<tr>';
+        echo '<th scope="row">' . esc_html__( 'Dry Run Mode', 'porkpress-ssl' ) . '</th>';
+        echo '<td><label><input name="porkpress_dry_run" type="checkbox" value="1"' . checked( $dry_run, true, false ) . ' /> ' . esc_html__( 'Enable dry-run mode', 'porkpress-ssl' ) . '</label></td>';
+        echo '</tr>';
 echo '</table>';
 submit_button();
 echo '</form>';
@@ -565,10 +608,49 @@ echo '</form>';
 
                $message = isset( $_GET['pp_msg'] ) ? sanitize_key( wp_unslash( $_GET['pp_msg'] ) ) : '';
 
+               $simulate_steps = '';
+               if ( isset( $_POST['porkpress_ssl_simulate_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_simulate_nonce'] ), 'porkpress_ssl_simulate' ) ) {
+                       $dry_service = new Domain_Service( null, true );
+                       $reconciler  = new Reconciler( $dry_service );
+                       $drift       = $reconciler->reconcile_all( false );
+                       $steps       = array();
+                       foreach ( $drift['missing_aliases'] as $item ) {
+                               if ( (int) $item['site_id'] === $site_id ) {
+                                       $steps[] = sprintf( __( 'Would add alias %1$s to site %2$d', 'porkpress-ssl' ), $item['domain'], $item['site_id'] );
+                               }
+                       }
+                       foreach ( $drift['stray_aliases'] as $item ) {
+                               if ( (int) $item['site_id'] === $site_id ) {
+                                       $steps[] = sprintf( __( 'Would remove alias %1$s from site %2$d', 'porkpress-ssl' ), $item['domain'], $item['site_id'] );
+                               }
+                       }
+                       foreach ( $drift['disabled_sites'] as $item ) {
+                               if ( (int) $item['site_id'] === $site_id ) {
+                                       $steps[] = sprintf( __( 'Would unarchive site %2$d (domain %1$s)', 'porkpress-ssl' ), $item['domain'], $item['site_id'] );
+                               }
+                       }
+                       $simulate_steps  = '<div class="notice notice-info"><p>' . esc_html__( 'Simulation results (no changes applied):', 'porkpress-ssl' ) . '</p>';
+                       if ( empty( $steps ) ) {
+                               $simulate_steps .= '<p>' . esc_html__( 'No actions required.', 'porkpress-ssl' ) . '</p>';
+                       } else {
+                               $simulate_steps .= '<ul><li>' . implode( '</li><li>', array_map( 'esc_html', $steps ) ) . '</li></ul>';
+                       }
+                       $simulate_steps .= '</div>';
+               }
+
                $aliases = $service->get_aliases( $site_id );
 
                echo '<div class="wrap">';
                echo '<h1>' . esc_html__( 'Domain Aliases', 'porkpress-ssl' ) . '</h1>';
+
+               echo '<form method="post" style="margin-bottom:1em;">';
+               wp_nonce_field( 'porkpress_ssl_simulate', 'porkpress_ssl_simulate_nonce' );
+               submit_button( __( 'Simulate', 'porkpress-ssl' ), 'secondary', 'simulate_now', false );
+               echo '</form>';
+
+               if ( $simulate_steps ) {
+                       echo $simulate_steps; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+               }
 
                if ( $message ) {
                        $text = '';
