@@ -58,18 +58,21 @@ dbDelta( $sql );
  * @param string $severity Log severity.
  */
 public static function log( $action, $context = array(), $result = '', $severity = 'info' ) {
-global $wpdb;
-$wpdb->insert(
-self::get_table_name(),
-array(
-'time'     => current_time( 'mysql' ),
-'user_id'  => get_current_user_id(),
-'action'   => $action,
-'context'  => wp_json_encode( $context ),
-'result'   => $result,
-'severity' => $severity,
-)
-);
+    global $wpdb;
+
+    $context = self::sanitize_context( wp_json_encode( $context ), false );
+
+    $wpdb->insert(
+        self::get_table_name(),
+        array(
+            'time'     => current_time( 'mysql' ),
+            'user_id'  => get_current_user_id(),
+            'action'   => $action,
+            'context'  => wp_json_encode( $context ),
+            'result'   => $result,
+            'severity' => $severity,
+        )
+    );
 }
 
 /**
