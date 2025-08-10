@@ -15,6 +15,25 @@ if ( ! function_exists( 'update_blog_status' ) ) {
         $updated_sites[ $site_id ][ $pref ] = $value;
     }
 }
+if ( ! function_exists( 'get_sites' ) ) {
+    function get_sites( $args = array() ) {
+        global $mock_sites;
+        $sites = array();
+        foreach ( $mock_sites as $id => $data ) {
+            $sites[] = (object) array(
+                'blog_id'  => $id,
+                'archived' => $data['archived'],
+            );
+        }
+        return $sites;
+    }
+}
+if ( ! function_exists( 'get_site_meta' ) ) {
+    function get_site_meta( $site_id, $key, $single = true ) {
+        global $site_meta;
+        return $site_meta[ $site_id ][ $key ] ?? '';
+    }
+}
 if ( ! defined( 'ARRAY_A' ) ) {
     define( 'ARRAY_A', 'ARRAY_A' );
 }
@@ -55,6 +74,108 @@ class ReconcilerTest extends TestCase {
         $this->assertTrue( $result );
         $this->assertSame( 1, $updated_sites[1]['archived'] );
         $this->assertCount( 0, $service->get_aliases( 1 ) );
+    }
+
+    public function testReconcileAll() {
+        global $wpdb, $updated_sites, $mock_sites, $site_meta;
+        $wpdb         = new MockWpdb();
+        $updated_sites = array();
+        $mock_sites    = array(
+            1 => array( 'archived' => 0 ),
+            2 => array( 'archived' => 1 ),
+            3 => array( 'archived' => 0 ),
+        );
+        $site_meta = array(
+            1 => array( 'porkpress_domain' => 'existing.com' ),
+            2 => array( 'porkpress_domain' => 'extra.com' ),
+            3 => array( 'porkpress_domain' => 'stray.com' ),
+        );
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public function __construct() {}
+            public function listDomains( int $page = 1, int $per_page = 100 ) {
+                return array(
+                    'status'  => 'SUCCESS',
+                    'domains' => array(
+                        array( 'domain' => 'existing.com', 'status' => 'ACTIVE' ),
+                        array( 'domain' => 'extra.com', 'status' => 'ACTIVE' ),
+                    ),
+                );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) {
+                $this->client              = $client;
+                $this->missing_credentials = false;
+            }
+        };
+
+        $service->add_alias( 1, 'existing.com', true );
+        $service->add_alias( 3, 'stray.com', true );
+
+        $reconciler = new \PorkPress\SSL\Reconciler( $service );
+        $result     = $reconciler->reconcile_all();
+
+        $this->assertCount( 1, $service->get_aliases( 2 ) );
+        $this->assertSame( 'extra.com', $service->get_aliases( 2 )[0]['domain'] );
+        $this->assertCount( 0, $service->get_aliases( 3 ) );
+        $this->assertSame( 0, $updated_sites[2]['archived'] );
+        $this->assertNotEmpty( $result['missing_aliases'] );
+        $this->assertNotEmpty( $result['stray_aliases'] );
+        $this->assertNotEmpty( $result['disabled_sites'] );
+    }
+
+    public function testReconcileAllWithoutApplyingChanges() {
+        global $wpdb, $updated_sites, $mock_sites, $site_meta;
+        $wpdb         = new MockWpdb();
+        $updated_sites = array();
+        $mock_sites    = array(
+            1 => array( 'archived' => 0 ),
+            2 => array( 'archived' => 1 ),
+            3 => array( 'archived' => 0 ),
+        );
+        $site_meta = array(
+            1 => array( 'porkpress_domain' => 'existing.com' ),
+            2 => array( 'porkpress_domain' => 'extra.com' ),
+            3 => array( 'porkpress_domain' => 'stray.com' ),
+        );
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public function __construct() {}
+            public function listDomains( int $page = 1, int $per_page = 100 ) {
+                return array(
+                    'status'  => 'SUCCESS',
+                    'domains' => array(
+                        array( 'domain' => 'existing.com', 'status' => 'ACTIVE' ),
+                        array( 'domain' => 'extra.com', 'status' => 'ACTIVE' ),
+                    ),
+                );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) {
+                $this->client              = $client;
+                $this->missing_credentials = false;
+            }
+        };
+
+        $service->add_alias( 1, 'existing.com', true );
+        $service->add_alias( 3, 'stray.com', true );
+
+        $reconciler = new \PorkPress\SSL\Reconciler( $service );
+        $result     = $reconciler->reconcile_all( false );
+
+        // No changes should have been applied.
+        $this->assertCount( 0, $service->get_aliases( 2 ) );
+        $this->assertCount( 1, $service->get_aliases( 3 ) );
+        $this->assertArrayNotHasKey( 2, $updated_sites );
+
+        // Drift should still be reported.
+        $this->assertNotEmpty( $result['missing_aliases'] );
+        $this->assertNotEmpty( $result['stray_aliases'] );
+        $this->assertNotEmpty( $result['disabled_sites'] );
     }
 }
 

@@ -129,16 +129,27 @@ class Admin {
                 $status       = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
                 $expiry_window = isset( $_GET['expiry'] ) ? absint( wp_unslash( $_GET['expiry'] ) ) : 0;
 
-                $service = new Domain_Service();
-                if ( ! $service->has_credentials() ) {
-                        printf(
-                                '<div class="error"><p>%s</p></div>',
-                                esc_html__( 'Porkbun API credentials are missing. Please configure them in the Settings tab.', 'porkpress-ssl' )
-                        );
-                        return;
-                }
+               $service = new Domain_Service();
+               if ( ! $service->has_credentials() ) {
+                       printf(
+                               '<div class="error"><p>%s</p></div>',
+                               esc_html__( 'Porkbun API credentials are missing. Please configure them in the Settings tab.', 'porkpress-ssl' )
+                       );
+                       return;
+               }
 
-                $result = $service->list_domains();
+               if ( isset( $_POST['porkpress_ssl_reconcile_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_reconcile_nonce'] ), 'porkpress_ssl_reconcile' ) ) {
+                       $reconciler = new Reconciler( $service );
+                       $reconciler->reconcile_all();
+                       echo '<div class="updated"><p>' . esc_html__( 'Reconciliation complete.', 'porkpress-ssl' ) . '</p></div>';
+               }
+
+               echo '<form method="post" style="margin-bottom:1em;">';
+               wp_nonce_field( 'porkpress_ssl_reconcile', 'porkpress_ssl_reconcile_nonce' );
+               submit_button( __( 'Reconcile Now', 'porkpress-ssl' ), 'secondary', 'reconcile_now', false );
+               echo '</form>';
+
+               $result = $service->list_domains();
                 if ( $result instanceof Porkbun_Client_Error ) {
                         $message = $result->message;
                         if ( $result->status ) {
@@ -321,6 +332,9 @@ update_site_option( 'porkpress_ssl_txt_timeout', $txt_timeout );
 $txt_interval = isset( $_POST['porkpress_txt_interval'] ) ? absint( wp_unslash( $_POST['porkpress_txt_interval'] ) ) : 0;
 update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
 
+$auto_reconcile = isset( $_POST['porkpress_auto_reconcile'] ) ? 1 : 0;
+update_site_option( 'porkpress_ssl_auto_reconcile', $auto_reconcile );
+
 // Log the settings update without exposing sensitive values.
 Logger::info(
     'update_settings',
@@ -331,6 +345,7 @@ Logger::info(
         'renew_window'       => $renew_window,
         'txt_timeout'        => $txt_timeout,
         'txt_interval'       => $txt_interval,
+        'auto_reconcile'     => (bool) $auto_reconcile,
     ),
     'Settings saved'
 );
@@ -344,6 +359,7 @@ $staging    = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 $renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
 $txt_timeout  = absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) );
 $txt_interval = absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) );
+$auto_reconcile = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
 
 echo '<form method="post">';
 wp_nonce_field( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
@@ -371,6 +387,10 @@ echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_txt_interval">' . esc_html__( 'TXT Record Wait Interval (seconds)', 'porkpress-ssl' ) . '</label></th>';
 echo '<td><input name="porkpress_txt_interval" type="number" id="porkpress_txt_interval" value="' . esc_attr( $txt_interval ) . '" class="small-text" /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row">' . esc_html__( 'Automatic Reconciliation', 'porkpress-ssl' ) . '</th>';
+echo '<td><label><input name="porkpress_auto_reconcile" type="checkbox" value="1"' . checked( $auto_reconcile, true, false ) . ' /> ' . esc_html__( 'Enable automatic drift remediation', 'porkpress-ssl' ) . '</label></td>';
 echo '</tr>';
 echo '</table>';
 submit_button();

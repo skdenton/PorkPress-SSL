@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       PorkPress SSL
  * Description:       Manage SSL certificates via Porkbun.
- * Version:           0.1.12
+ * Version:           0.1.14
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Network:           true
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const PORKPRESS_SSL_VERSION = '0.1.12';
+const PORKPRESS_SSL_VERSION = '0.1.14';
 const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
 const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
 require_once __DIR__ . '/includes/class-admin.php';
@@ -35,6 +35,9 @@ require_once __DIR__ . '/includes/class-reconciler.php';
 function porkpress_ssl_activate() {
         \PorkPress\SSL\Logger::create_table();
        \PorkPress\SSL\Domain_Service::create_alias_table();
+       if ( ! wp_next_scheduled( 'porkpress_ssl_reconcile' ) ) {
+               wp_schedule_event( time(), 'daily', 'porkpress_ssl_reconcile' );
+       }
         // Grant request capability to site administrators on all sites.
         if ( is_multisite() ) {
                 foreach ( get_sites() as $site ) {
@@ -74,6 +77,10 @@ function porkpress_ssl_deactivate() {
                         $role->remove_cap( PORKPRESS_SSL_CAP_REQUEST_DOMAIN );
                 }
         }
+       $timestamp = wp_next_scheduled( 'porkpress_ssl_reconcile' );
+       if ( $timestamp ) {
+               wp_unschedule_event( $timestamp, 'porkpress_ssl_reconcile' );
+       }
 }
 register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
 
@@ -106,6 +113,22 @@ function porkpress_ssl_init() {
        }
 }
 add_action( 'plugins_loaded', 'porkpress_ssl_init' );
+
+add_action( 'porkpress_ssl_reconcile', function () {
+       $reconciler = new \PorkPress\SSL\Reconciler();
+       $apply      = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
+       $drift      = $reconciler->reconcile_all( $apply );
+       if ( array_filter( $drift ) ) {
+               \PorkPress\SSL\Logger::info(
+                       'reconcile',
+                       array(
+                               'auto'  => $apply,
+                               'drift' => $drift,
+                       ),
+                       $apply ? 'changes applied' : 'drift detected'
+               );
+       }
+} );
 
 /**
  * Map meta capabilities for the plugin.
