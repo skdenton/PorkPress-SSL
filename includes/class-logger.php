@@ -134,4 +134,33 @@ $sql = $wpdb->prepare( $sql, $params );
 
 return $wpdb->get_results( $sql, ARRAY_A );
 }
+
+/**
+ * Redact sensitive fields from a context JSON string.
+ *
+ * @param string $context_json JSON-encoded context.
+ * @param bool   $encode       Whether to return JSON string. If false, returns array.
+ *
+ * @return string|array
+ */
+public static function sanitize_context( string $context_json, bool $encode = true ) {
+$data = json_decode( $context_json, true );
+if ( ! is_array( $data ) ) {
+return $encode ? $context_json : $data;
+}
+
+$secrets = array( 'api_key', 'api_secret', 'key', 'secret', 'password' );
+foreach ( $secrets as $secret ) {
+if ( array_key_exists( $secret, $data ) ) {
+unset( $data[ $secret ] );
+}
+}
+
+if ( ! $encode ) {
+return $data;
+}
+
+$encode_fn = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+return $encode_fn( $data );
+}
 }
