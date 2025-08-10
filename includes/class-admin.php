@@ -302,6 +302,7 @@ class Admin {
                $title    = isset( $_POST['new_site_title'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_title'] ) ) : '';
                $email    = isset( $_POST['new_site_email'] ) ? sanitize_email( wp_unslash( $_POST['new_site_email'] ) ) : '';
                $template = isset( $_POST['new_site_template'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_template'] ) ) : '';
+               $override = isset( $_POST['override'] ) ? sanitize_text_field( wp_unslash( $_POST['override'] ) ) : '';
 
                $service = new Domain_Service();
 
@@ -315,7 +316,7 @@ class Admin {
                                }
                                break;
                        case 'detach':
-                               $result = $service->detach_from_site( $domain );
+                               $result = $service->detach_from_site( $domain, 'CONFIRM' === strtoupper( $override ) );
                                break;
                        default:
                                wp_send_json_error( 'unknown_action' );
@@ -579,6 +580,10 @@ echo '</form>';
                if ( isset( $_GET['make_primary'] ) ) {
                        $domain = sanitize_text_field( wp_unslash( $_GET['make_primary'] ) );
                        check_admin_referer( 'porkpress_make_primary_' . $domain );
+                       if ( 'CONFIRM' !== ( $_GET['confirm'] ?? '' ) ) {
+                               wp_safe_redirect( add_query_arg( 'pp_msg', 'confirm', $redirect ) );
+                               exit;
+                       }
                        $service->set_primary_alias( $site_id, $domain );
                        wp_safe_redirect( add_query_arg( 'pp_msg', 'primary', $redirect ) );
                        exit;
@@ -587,6 +592,10 @@ echo '</form>';
                if ( isset( $_GET['delete_alias'] ) ) {
                        $domain = sanitize_text_field( wp_unslash( $_GET['delete_alias'] ) );
                        check_admin_referer( 'porkpress_delete_alias_' . $domain );
+                       if ( 'CONFIRM' !== ( $_GET['confirm'] ?? '' ) ) {
+                               wp_safe_redirect( add_query_arg( 'pp_msg', 'confirm', $redirect ) );
+                               exit;
+                       }
                        $aliases   = $service->get_aliases( $site_id );
                        $can_delete = true;
                        foreach ( $aliases as $alias ) {
@@ -670,6 +679,9 @@ echo '</form>';
                                case 'nodelete':
                                        $text = __( 'Cannot remove the primary alias.', 'porkpress-ssl' );
                                        break;
+                               case 'confirm':
+                                       $text = __( 'Action cancelled. Type CONFIRM to proceed.', 'porkpress-ssl' );
+                                       break;
                        }
                        if ( $text ) {
                                printf( '<div class="notice notice-info"><p>%s</p></div>', esc_html( $text ) );
@@ -690,8 +702,9 @@ echo '</form>';
                                if ( ! $alias['is_primary'] ) {
                                        $primary_url = wp_nonce_url( add_query_arg( 'make_primary', rawurlencode( $alias['domain'] ), $redirect ), 'porkpress_make_primary_' . $alias['domain'] );
                                        $delete_url  = wp_nonce_url( add_query_arg( 'delete_alias', rawurlencode( $alias['domain'] ), $redirect ), 'porkpress_delete_alias_' . $alias['domain'] );
-                                       echo '<a href="' . esc_url( $primary_url ) . '">' . esc_html__( 'Set Primary', 'porkpress-ssl' ) . '</a> | ';
-                                       echo '<a href="' . esc_url( $delete_url ) . '" onclick="return confirm(\'' . esc_js( __( 'Are you sure?', 'porkpress-ssl' ) ) . '\');">' . esc_html__( 'Remove', 'porkpress-ssl' ) . '</a>';
+                                       $prompt = esc_js( __( 'Type CONFIRM to proceed:', 'porkpress-ssl' ) );
+                                       echo '<a href="#" onclick="var c=prompt(\'' . $prompt . '\'); if(c===\'CONFIRM\'){window.location.href=\'' . esc_url( add_query_arg( 'confirm', 'CONFIRM', $primary_url ) ) . '\';} return false;">' . esc_html__( 'Set Primary', 'porkpress-ssl' ) . '</a> | ';
+                                       echo '<a href="#" onclick="var c=prompt(\'' . $prompt . '\'); if(c===\'CONFIRM\'){window.location.href=\'' . esc_url( add_query_arg( 'confirm', 'CONFIRM', $delete_url ) ) . '\';} return false;">' . esc_html__( 'Remove', 'porkpress-ssl' ) . '</a>';
                                } else {
                                        echo '&#8212;';
                                }

@@ -190,19 +190,48 @@ class Domain_Service {
        /**
         * Detach a domain from any site.
         *
-        * @param string $domain Domain name.
+        * @param string $domain   Domain name.
+        * @param bool   $override Whether to override content checks.
         *
-        * @return bool
+        * @return bool|\WP_Error True on success, error on failure.
         */
-       public function detach_from_site( string $domain ): bool {
+       public function detach_from_site( string $domain, bool $override = false ) {
                if ( function_exists( 'get_sites' ) && function_exists( 'delete_site_meta' ) ) {
                        $sites = get_sites( array( 'meta_key' => 'porkpress_domain', 'meta_value' => $domain ) );
                        foreach ( $sites as $site ) {
+                               if ( ! $override && $this->site_has_content( (int) $site->blog_id ) ) {
+                                       return new \WP_Error( 'site_not_empty', __( 'Site has content. Type CONFIRM to detach.', 'porkpress-ssl' ) );
+                               }
                                delete_site_meta( $site->blog_id, 'porkpress_domain', $domain );
                        }
                }
 
                return true;
+       }
+
+       /**
+        * Determine whether a site has content.
+        *
+        * @param int $site_id Site ID.
+        *
+        * @return bool
+        */
+       protected function site_has_content( int $site_id ): bool {
+               if ( ! function_exists( 'switch_to_blog' ) || ! function_exists( 'restore_current_blog' ) || ! function_exists( 'get_posts' ) ) {
+                       return false;
+               }
+
+               switch_to_blog( $site_id );
+               $posts = get_posts(
+                       array(
+                               'post_type'      => 'any',
+                               'posts_per_page' => 1,
+                               'post_status'    => 'any',
+                       )
+               );
+               restore_current_blog();
+
+               return ! empty( $posts );
        }
 
        /**
