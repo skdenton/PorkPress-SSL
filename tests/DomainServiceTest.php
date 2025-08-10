@@ -9,6 +9,21 @@ if ( ! function_exists( 'sanitize_text_field' ) ) {
         return $str;
     }
 }
+if ( ! function_exists( 'wp_json_encode' ) ) {
+    function wp_json_encode( $data ) {
+        return json_encode( $data );
+    }
+}
+if ( ! function_exists( 'get_current_user_id' ) ) {
+    function get_current_user_id() {
+        return 0;
+    }
+}
+if ( ! function_exists( 'current_time' ) ) {
+    function current_time() {
+        return date( 'Y-m-d H:i:s' );
+    }
+}
 if ( ! defined( 'ARRAY_A' ) ) {
     define( 'ARRAY_A', 'ARRAY_A' );
 }
@@ -40,7 +55,7 @@ class MockWpdb {
         return '';
     }
 
-    public function insert( $table, $data, $format ) {
+    public function insert( $table, $data, $format = null ) {
         $this->data[ $table ][] = $data;
         return 1;
     }
@@ -97,6 +112,7 @@ class MockWpdb {
         return false;
     }
 }
+require_once __DIR__ . '/../includes/class-logger.php';
 require_once __DIR__ . '/../includes/class-domain-service.php';
 require_once __DIR__ . '/../includes/class-porkbun-client.php';
 
@@ -203,6 +219,62 @@ class DomainServiceTest extends TestCase {
 
         $service->delete_alias( 1, 'example.com' );
         $this->assertCount( 0, $service->get_aliases( 1 ) );
+    }
+
+    public function testAttachToSiteCreatesARecord() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        if ( ! function_exists( 'update_site_meta' ) ) {
+            function update_site_meta( $site_id, $key, $value ) {}
+        }
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $args = array();
+            public function __construct() {}
+            public function createARecord( string $domain, string $name, string $content, int $ttl = 300 ) {
+                $this->args = func_get_args();
+                return array( 'status' => 'SUCCESS' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool { return true; }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+        };
+
+        $this->assertTrue( $service->attach_to_site( 'example.com', 1, 600 ) );
+        $this->assertSame( ['example.com', '', '1.1.1.1', 600], $client->args );
+    }
+
+    public function testAttachToSiteReturnsErrorOnApiFailure() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        if ( ! function_exists( 'update_site_meta' ) ) {
+            function update_site_meta( $site_id, $key, $value ) {}
+        }
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public function __construct() {}
+            public function createARecord( string $domain, string $name, string $content, int $ttl = 300 ) {
+                return new \PorkPress\SSL\Porkbun_Client_Error( 'err', 'fail' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool { return true; }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+        };
+
+        $result = $service->attach_to_site( 'example.com', 1 );
+        $this->assertInstanceOf( \PorkPress\SSL\Porkbun_Client_Error::class, $result );
+        $logs = $wpdb->data['wp_porkpress_logs'] ?? array();
+        $this->assertNotEmpty( $logs );
+        $log = end( $logs );
+        $this->assertSame( 'create_a_record', $log['action'] );
     }
 
     public function testSetPrimaryAlias() {
