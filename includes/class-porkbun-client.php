@@ -169,25 +169,48 @@ class Porkbun_Client {
                 }
         }
 
-	/**
-	 * Low-level HTTP request using cURL.
-	 */
-	protected function performHttpRequest( string $url, array $payload, string $method ): array {
-		$ch = curl_init( $url );
-		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-		curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, $method );
-		curl_setopt( $ch, CURLOPT_HTTPHEADER, [ 'Content-Type: application/json' ] );
-		curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $payload ) );
-		$body = curl_exec( $ch );
-		if ( false === $body ) {
-			$error = curl_error( $ch );
-			curl_close( $ch );
-			return [ 'status' => 0, 'body' => $error ];
-		}
-		$status = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-		curl_close( $ch );
-		return [ 'status' => $status, 'body' => $body ];
-	}
+        /**
+         * Low-level HTTP request using WP HTTP API if available, falling back to cURL.
+         */
+        protected function performHttpRequest( string $url, array $payload, string $method ): array {
+                if ( function_exists( 'wp_remote_request' ) ) {
+                        $args = [
+                                'method'  => $method,
+                                'headers' => [ 'Content-Type' => 'application/json' ],
+                                'body'    => wp_json_encode( $payload ),
+                        ];
+
+                        if ( 'POST' === strtoupper( $method ) ) {
+                                $response = wp_remote_post( $url, $args );
+                        } else {
+                                $response = wp_remote_request( $url, $args );
+                        }
+
+                        if ( is_wp_error( $response ) ) {
+                                return [ 'status' => 0, 'body' => $response->get_error_message() ];
+                        }
+
+                        $status = wp_remote_retrieve_response_code( $response );
+                        $body   = wp_remote_retrieve_body( $response );
+
+                        return [ 'status' => $status, 'body' => $body ];
+                }
+
+                $ch = curl_init( $url );
+                curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+                curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, $method );
+                curl_setopt( $ch, CURLOPT_HTTPHEADER, [ 'Content-Type: application/json' ] );
+                curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $payload ) );
+                $body = curl_exec( $ch );
+                if ( false === $body ) {
+                        $error = curl_error( $ch );
+                        curl_close( $ch );
+                        return [ 'status' => 0, 'body' => $error ];
+                }
+                $status = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+                curl_close( $ch );
+                return [ 'status' => $status, 'body' => $body ];
+        }
 
 	/**
 	 * Calculate exponential backoff with jitter.
