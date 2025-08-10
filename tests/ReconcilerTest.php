@@ -52,8 +52,10 @@ class ReconcilerTest extends TestCase {
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
             public function listDomains( int $page = 1, int $per_page = 100 ) {
-                // Return empty list so domain is treated as missing.
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
+            }
+            public function getDomain( string $domain ) {
+                return [ 'status' => 'SUCCESS', 'domain' => [ 'status' => 'INACTIVE' ] ];
             }
         };
 

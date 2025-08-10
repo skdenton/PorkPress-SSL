@@ -135,6 +135,50 @@ class DomainServiceTest extends TestCase {
         $this->assertSame( '2024-01-01', $domain['expiry'] );
     }
 
+    public function testListDomainsCachesResult() {
+        $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public int $calls = 0;
+            public function __construct() {}
+            public function listDomains( int $page = 1, int $per_page = 100 ) {
+                $this->calls++;
+                return [ 'status' => 'SUCCESS', 'domains' => [] ];
+            }
+        };
+
+        $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) {
+                $this->client = $client;
+                $this->missing_credentials = false;
+            }
+        };
+
+        $service->list_domains();
+        $service->list_domains();
+
+        $this->assertSame( 1, $mock->calls );
+    }
+
+    public function testIsDomainActiveUsesSingleEndpoint() {
+        $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public string $last_domain = '';
+            public function __construct() {}
+            public function getDomain( string $domain ) {
+                $this->last_domain = $domain;
+                return [ 'status' => 'SUCCESS', 'domain' => [ 'status' => 'ACTIVE' ] ];
+            }
+        };
+
+        $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) {
+                $this->client = $client;
+                $this->missing_credentials = false;
+            }
+        };
+
+        $this->assertTrue( $service->is_domain_active( 'example.com' ) );
+        $this->assertSame( 'example.com', $mock->last_domain );
+    }
+
     public function testAliasCrud() {
         global $wpdb;
         $wpdb = new MockWpdb();
