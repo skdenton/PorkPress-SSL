@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       PorkPress SSL
  * Description:       Manage SSL certificates via Porkbun.
- * Version:           0.1.18
+ * Version:           0.1.19
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Network:           true
@@ -19,9 +19,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const PORKPRESS_SSL_VERSION = '0.1.17';
+const PORKPRESS_SSL_VERSION = '0.1.19';
 const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
 const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
+
+if ( ! defined( 'PORKPRESS_CERT_ROOT' ) ) {
+        define( 'PORKPRESS_CERT_ROOT', '/etc/letsencrypt' );
+}
+if ( ! defined( 'PORKPRESS_STATE_ROOT' ) ) {
+        define( 'PORKPRESS_STATE_ROOT', '/var/lib/porkpress-ssl' );
+}
+
 require_once __DIR__ . '/includes/class-admin.php';
 require_once __DIR__ . '/includes/class-porkbun-client.php';
 require_once __DIR__ . '/includes/class-porkbun-client-dryrun.php';
@@ -30,6 +38,11 @@ require_once __DIR__ . '/includes/class-ssl-service.php';
 require_once __DIR__ . '/includes/class-logger.php';
 require_once __DIR__ . '/includes/class-reconciler.php';
 require_once __DIR__ . '/includes/class-txt-propagation-waiter.php';
+
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+        require_once __DIR__ . '/includes/class-cli.php';
+        \WP_CLI::add_command( 'porkpress ssl', \PorkPress\SSL\CLI::class );
+}
 
 /**
  * Activation hook callback.
