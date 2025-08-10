@@ -249,15 +249,23 @@ class Admin {
                        wp_send_json_error( 'no_permission' );
                }
 
-               $domain = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
-               $action = isset( $_POST['bulk_action'] ) ? sanitize_key( wp_unslash( $_POST['bulk_action'] ) ) : '';
-               $site_id = isset( $_POST['site_id'] ) ? absint( wp_unslash( $_POST['site_id'] ) ) : 0;
+               $domain   = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
+               $action   = isset( $_POST['bulk_action'] ) ? sanitize_key( wp_unslash( $_POST['bulk_action'] ) ) : '';
+               $site_id  = isset( $_POST['site_id'] ) ? absint( wp_unslash( $_POST['site_id'] ) ) : 0;
+               $title    = isset( $_POST['new_site_title'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_title'] ) ) : '';
+               $email    = isset( $_POST['new_site_email'] ) ? sanitize_email( wp_unslash( $_POST['new_site_email'] ) ) : '';
+               $template = isset( $_POST['new_site_template'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_template'] ) ) : '';
 
                $service = new Domain_Service();
 
                switch ( $action ) {
                        case 'attach':
-                               $result = $service->attach_to_site( $domain, $site_id );
+                               if ( $site_id > 0 ) {
+                                       $result = $service->attach_to_site( $domain, $site_id );
+                               } else {
+                                       $result  = $service->create_site( $domain, $title, $email, $template );
+                                       $site_id = is_wp_error( $result ) ? 0 : (int) $result;
+                               }
                                break;
                        case 'detach':
                                $result = $service->detach_from_site( $domain );
@@ -269,6 +277,11 @@ class Admin {
                if ( $result instanceof Porkbun_Client_Error ) {
                        Logger::error( $action, array( 'domain' => $domain ), $result->message );
                        wp_send_json_error( $result->message );
+               }
+
+               if ( is_wp_error( $result ) ) {
+                       Logger::error( $action, array( 'domain' => $domain ), $result->get_error_message() );
+                       wp_send_json_error( $result->get_error_message() );
                }
 
                Logger::info( $action, array( 'domain' => $domain, 'site_id' => $site_id ), 'success' );
