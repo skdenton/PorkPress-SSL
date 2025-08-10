@@ -86,8 +86,14 @@ class SSL_Service {
         */
        public static function run_queue( ?Domain_Service $domains = null ): void {
                $domains = $domains ?: new Domain_Service();
+               $queue   = self::get_queue();
 
-               foreach ( self::get_queue() as $site_id ) {
+               if ( empty( $queue ) ) {
+                       return;
+               }
+
+               $all_domains = array();
+               foreach ( $queue as $site_id ) {
                        $aliases = $domains->get_aliases( $site_id );
                        $names   = array_map( fn( $a ) => $a['domain'], $aliases );
 
@@ -99,7 +105,67 @@ class SSL_Service {
                                ),
                                'queued'
                        );
+
+                       $all_domains = array_merge( $all_domains, $names );
                }
+
+               $all_domains = array_values( array_unique( $all_domains ) );
+
+               if ( empty( $all_domains ) ) {
+                       self::clear_queue();
+                       return;
+               }
+
+               $cert_name = 'porkpress-network';
+               $staging   = function_exists( '\\get_site_option' ) ? (bool) \get_site_option( 'porkpress_ssl_le_staging', 0 ) : false;
+
+               $cmd = Renewal_Service::build_certbot_command( $all_domains, $cert_name, $staging, false );
+
+               $result = null;
+               if ( is_callable( Renewal_Service::$runner ) ) {
+                       $result = call_user_func( Renewal_Service::$runner, $cmd );
+               } else {
+                       $output = array();
+                       $code   = 0;
+                       exec( $cmd . ' 2>&1', $output, $code );
+                       $result = array(
+                               'code'   => $code,
+                               'output' => implode( "\n", $output ),
+                       );
+               }
+
+               if ( 0 !== $result['code'] ) {
+                       Logger::error(
+                               'issue_certificate',
+                               array(
+                                       'site_ids' => $queue,
+                                       'domains'  => $all_domains,
+                                       'output'   => $result['output'],
+                               ),
+                               'certbot failed'
+                       );
+                       Notifier::notify(
+                               'error',
+                               __( 'SSL issuance failed', 'porkpress-ssl' ),
+                               __( 'Certbot failed during issuance.', 'porkpress-ssl' )
+                       );
+                       return;
+               }
+
+               Renewal_Service::write_manifest( $all_domains, $cert_name );
+               Logger::info(
+                       'issue_certificate',
+                       array(
+                               'site_ids' => $queue,
+                               'domains'  => $all_domains,
+                       ),
+                       'success'
+               );
+               Notifier::notify(
+                       'success',
+                       __( 'SSL certificate issued', 'porkpress-ssl' ),
+                       __( 'Certificate issuance completed successfully.', 'porkpress-ssl' )
+               );
 
                self::clear_queue();
        }

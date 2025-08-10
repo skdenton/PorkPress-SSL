@@ -10,9 +10,30 @@ if ( ! function_exists( 'get_site_option' ) ) {
     function get_site_option( $key, $default = array() ) {
         return $GLOBALS['porkpress_site_options'][ $key ] ?? $default;
     }
+}
+if ( ! function_exists( 'update_site_option' ) ) {
     function update_site_option( $key, $value ) {
         $GLOBALS['porkpress_site_options'][ $key ] = $value;
     }
+}
+
+if ( ! function_exists( 'network_admin_url' ) ) {
+    function network_admin_url( $path = '' ) { return 'https://example.com/' . ltrim( $path, '/' ); }
+}
+if ( ! function_exists( 'esc_url' ) ) {
+    function esc_url( $url ) { return $url; }
+}
+if ( ! function_exists( 'esc_html__' ) ) {
+    function esc_html__( $text, $domain = null ) { return $text; }
+}
+if ( ! function_exists( '__' ) ) {
+    function __( $text, $domain = null ) { return $text; }
+}
+if ( ! function_exists( 'wp_mail' ) ) {
+    function wp_mail( $to, $subject, $message ) {}
+}
+if ( ! function_exists( 'wp_mkdir_p' ) ) {
+    function wp_mkdir_p( $dir ) { if ( ! is_dir( $dir ) ) { mkdir( $dir, 0777, true ); } }
 }
 
 if ( ! function_exists( 'wp_next_scheduled' ) ) {
@@ -53,11 +74,33 @@ class DummyWpdb {
 require_once __DIR__ . '/../includes/class-ssl-service.php';
 require_once __DIR__ . '/../includes/class-domain-service.php';
 require_once __DIR__ . '/../includes/class-logger.php';
+require_once __DIR__ . '/../includes/class-notifier.php';
+require_once __DIR__ . '/../includes/class-renewal-service.php';
 
+/**
+ * @runTestsInSeparateProcesses
+ */
 class SSLServiceTest extends TestCase {
     protected function setUp(): void {
         global $wpdb;
         $wpdb = new DummyWpdb();
+        $GLOBALS['porkpress_site_options'] = array();
+
+        $state_root = sys_get_temp_dir() . '/porkpress-test-state';
+        if ( ! defined( 'PORKPRESS_STATE_ROOT' ) ) {
+            define( 'PORKPRESS_STATE_ROOT', $state_root );
+        }
+        if ( ! is_dir( PORKPRESS_STATE_ROOT ) ) {
+            mkdir( PORKPRESS_STATE_ROOT, 0777, true );
+        }
+
+        $cert_root = sys_get_temp_dir() . '/porkpress-test-cert';
+        if ( ! defined( 'PORKPRESS_CERT_ROOT' ) ) {
+            define( 'PORKPRESS_CERT_ROOT', $cert_root );
+        }
+        if ( ! is_dir( PORKPRESS_CERT_ROOT ) ) {
+            mkdir( PORKPRESS_CERT_ROOT, 0777, true );
+        }
     }
 
     public function testQueueAndRun() {
@@ -72,11 +115,39 @@ class SSLServiceTest extends TestCase {
             public function __construct() {}
             public function get_aliases( ?int $site_id = null, ?string $domain = null ): array {
                 $this->seen[] = $site_id;
-                return array( array( 'domain' => 'example.com' ) );
+                if ( 1 === $site_id ) {
+                    return array(
+                        array( 'domain' => 'example.com' ),
+                        array( 'domain' => 'www.example.com' ),
+                    );
+                }
+                if ( 2 === $site_id ) {
+                    return array(
+                        array( 'domain' => 'foo.com' ),
+                        array( 'domain' => 'www.example.com' ),
+                    );
+                }
+                return array();
             }
         };
 
+        $captured_cmd = '';
+        \PorkPress\SSL\Renewal_Service::$runner = function( $cmd ) use ( &$captured_cmd ) {
+            $captured_cmd = $cmd;
+            return array( 'code' => 0, 'output' => 'ok' );
+        };
+
         \PorkPress\SSL\SSL_Service::run_queue( $domains );
+
+        $expected_domains = array( 'example.com', 'www.example.com', 'foo.com' );
+        $expected_cmd     = \PorkPress\SSL\Renewal_Service::build_certbot_command( $expected_domains, 'porkpress-network', false, false );
+        $this->assertSame( $expected_cmd, $captured_cmd );
+
+        $manifest = json_decode( file_get_contents( PORKPRESS_STATE_ROOT . '/manifest.json' ), true );
+        $this->assertSame( $expected_domains, $manifest['domains'] );
+
+        $notices = get_site_option( \PorkPress\SSL\Notifier::OPTION );
+        $this->assertSame( 'success', $notices[0]['type'] );
 
         $this->assertSame( [ 1, 2 ], $domains->seen );
         $this->assertSame( [], \PorkPress\SSL\SSL_Service::get_queue() );
