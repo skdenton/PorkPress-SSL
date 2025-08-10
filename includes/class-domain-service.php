@@ -258,13 +258,18 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
         * Attach a domain to a site.
         *
         * @param string $domain Domain name.
-        * @param int    $site_id Site ID.
-        *
-        * @return bool|Porkbun_Client_Error
-        */
+       * @param int    $site_id Site ID.
+       *
+       * @return bool|Porkbun_Client_Error
+       */
        public function attach_to_site( string $domain, int $site_id ) {
                if ( function_exists( 'update_site_meta' ) ) {
                        update_site_meta( $site_id, 'porkpress_domain', $domain );
+               }
+
+               $result = $this->add_alias( $site_id, $domain, true, 'active' );
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       return $result;
                }
 
                return true;
@@ -334,7 +339,7 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
         * @param string $domain   Domain name.
         * @param bool   $override Whether to override content checks.
         *
-        * @return bool|\WP_Error True on success, error on failure.
+        * @return bool|Porkbun_Client_Error|\WP_Error True on success, error on failure.
         */
        public function detach_from_site( string $domain, bool $override = false ) {
                if ( function_exists( 'get_sites' ) && function_exists( 'delete_site_meta' ) ) {
@@ -344,6 +349,10 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
                                        return new \WP_Error( 'site_not_empty', __( 'Site has content. Type CONFIRM to detach.', 'porkpress-ssl' ) );
                                }
                                delete_site_meta( $site->blog_id, 'porkpress_domain', $domain );
+                               $result = $this->delete_alias( $site->blog_id, $domain );
+                               if ( $result instanceof Porkbun_Client_Error ) {
+                                       return $result;
+                               }
                        }
                }
 
