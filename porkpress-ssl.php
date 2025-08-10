@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       PorkPress SSL
  * Description:       Manage SSL certificates via Porkbun.
- * Version:           0.1.21
+ * Version:           0.1.22
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Network:           true
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const PORKPRESS_SSL_VERSION = '0.1.21';
+const PORKPRESS_SSL_VERSION = '0.1.22';
 const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
 const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
 
@@ -39,6 +39,7 @@ require_once __DIR__ . '/includes/class-logger.php';
 require_once __DIR__ . '/includes/class-reconciler.php';
 require_once __DIR__ . '/includes/class-txt-propagation-waiter.php';
 require_once __DIR__ . '/includes/class-renewal-service.php';
+require_once __DIR__ . '/includes/class-notifier.php';
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
         require_once __DIR__ . '/includes/class-cli.php';
@@ -123,6 +124,7 @@ function porkpress_ssl_init() {
 
        $admin = new \PorkPress\SSL\Admin();
       $admin->init();
+      \PorkPress\SSL\Notifier::register();
       \PorkPress\SSL\Renewal_Service::maybe_schedule();
 
       if ( is_network_admin() && isset( $_GET['page'] ) && 'porkpress-ssl' === $_GET['page'] ) {

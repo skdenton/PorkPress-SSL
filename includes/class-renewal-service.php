@@ -19,6 +19,9 @@ public const CRON_HOOK = 'porkpress_ssl_run_renewal';
 /** Option key for tracking attempts. */
 private const OPTION_ATTEMPTS = 'porkpress_ssl_renew_attempts';
 
+/** Option key for pending expiry notification. */
+private const OPTION_EXPIRY_NOTIFIED = 'porkpress_ssl_expiry_notified';
+
 /** Maximum number of retries. */
 private const MAX_RETRIES = 5;
 
@@ -45,19 +48,31 @@ return;
 
 $renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
 $timestamp    = strtotime( $manifest['expires_at'] ) - $renew_window * DAY_IN_SECONDS;
-if ( $timestamp <= time() ) {
-$timestamp = time();
-}
+        if ( $timestamp <= time() ) {
+        $timestamp = time();
+        }
 
-$existing = wp_next_scheduled( self::CRON_HOOK );
-if ( $force || ! $existing || $existing !== $timestamp ) {
-if ( $existing ) {
-wp_unschedule_event( $existing, self::CRON_HOOK );
-}
-wp_schedule_single_event( $timestamp, self::CRON_HOOK );
-update_site_option( self::OPTION_ATTEMPTS, 0 );
-}
-}
+        $existing = wp_next_scheduled( self::CRON_HOOK );
+        if ( $force || ! $existing || $existing !== $timestamp ) {
+        if ( $existing ) {
+        wp_unschedule_event( $existing, self::CRON_HOOK );
+        }
+        wp_schedule_single_event( $timestamp, self::CRON_HOOK );
+        update_site_option( self::OPTION_ATTEMPTS, 0 );
+        }
+
+        $expires_at_ts = strtotime( $manifest['expires_at'] );
+        if ( $expires_at_ts - time() <= $renew_window * DAY_IN_SECONDS ) {
+        if ( get_site_option( self::OPTION_EXPIRY_NOTIFIED ) !== $manifest['expires_at'] ) {
+        \PorkPress\SSL\Notifier::notify(
+        'warning',
+        __( 'SSL certificate expiring soon', 'porkpress-ssl' ),
+        sprintf( __( 'Certificate will expire on %s.', 'porkpress-ssl' ), gmdate( 'Y-m-d', $expires_at_ts ) )
+        );
+        update_site_option( self::OPTION_EXPIRY_NOTIFIED, $manifest['expires_at'] );
+        }
+        }
+        }
 
 /**
  * Execute the renewal process.
@@ -74,21 +89,24 @@ $staging   = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 
 $cmd    = self::build_certbot_command( $manifest['domains'], $cert_name, $staging, true );
 $result = self::execute( $cmd );
-if ( 0 !== $result['code'] ) {
-Logger::error( 'renew_certificate', array( 'attempt' => $attempt, 'output' => $result['output'] ), 'certbot failed' );
-update_site_option( self::OPTION_ATTEMPTS, $attempt );
-if ( $attempt <= self::MAX_RETRIES ) {
-$delay = self::calculate_backoff( $attempt );
-wp_schedule_single_event( time() + $delay, self::CRON_HOOK );
-}
-return;
-}
+        if ( 0 !== $result['code'] ) {
+        Logger::error( 'renew_certificate', array( 'attempt' => $attempt, 'output' => $result['output'] ), 'certbot failed' );
+        update_site_option( self::OPTION_ATTEMPTS, $attempt );
+        \PorkPress\SSL\Notifier::notify( 'error', __( 'SSL renewal failed', 'porkpress-ssl' ), __( 'Certbot failed during renewal.', 'porkpress-ssl' ) );
+        if ( $attempt <= self::MAX_RETRIES ) {
+        $delay = self::calculate_backoff( $attempt );
+        wp_schedule_single_event( time() + $delay, self::CRON_HOOK );
+        }
+        return;
+        }
 
-self::write_manifest( $manifest['domains'], $cert_name );
-Logger::info( 'renew_certificate', array( 'attempt' => $attempt ), 'success' );
-update_site_option( self::OPTION_ATTEMPTS, 0 );
-self::maybe_schedule( true );
-}
+        self::write_manifest( $manifest['domains'], $cert_name );
+        Logger::info( 'renew_certificate', array( 'attempt' => $attempt ), 'success' );
+        update_site_option( self::OPTION_ATTEMPTS, 0 );
+        update_site_option( self::OPTION_EXPIRY_NOTIFIED, $manifest['expires_at'] ?? '' );
+        \PorkPress\SSL\Notifier::notify( 'success', __( 'SSL certificate renewed', 'porkpress-ssl' ), __( 'Certificate renewal completed successfully.', 'porkpress-ssl' ) );
+        self::maybe_schedule( true );
+        }
 
 /**
  * Execute a shell command.
