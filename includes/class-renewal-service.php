@@ -166,7 +166,7 @@ return $cmd;
  * @param array  $domains   Domains included.
  * @param string $cert_name Certificate name.
  */
-protected static function write_manifest( array $domains, string $cert_name ): void {
+public static function write_manifest( array $domains, string $cert_name ): void {
 $cert_root  = defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt';
 $state_root = defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl';
 $live_dir = rtrim( $cert_root, '/\\' ) . '/live/' . $cert_name;
