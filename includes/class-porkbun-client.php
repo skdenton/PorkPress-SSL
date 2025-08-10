@@ -72,9 +72,9 @@ class Porkbun_Client {
 		}
 	}
 
-	/**
-	 * List domains with pagination.
-	 */
+        /**
+         * List domains with pagination.
+         */
         public function listDomains( int $page = 1, int $per_page = 100 ) {
                 $start = max( 0, ( $page - 1 ) * $per_page );
 
@@ -83,10 +83,19 @@ class Porkbun_Client {
                 ] );
         }
 
-	/**
-	 * Retrieve DNS records for a domain.
+       /**
+        * Retrieve details for a single domain.
+        */
+       public function getDomain( string $domain ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "domain/get/{$domain}", [] );
+       }
+
+        /**
+         * Retrieve DNS records for a domain.
  */
-	public function getRecords( string $domain ) {
+        public function getRecords( string $domain ) {
 		return $this->request( "dns/retrieve/{$domain}", [] );
 	}
 

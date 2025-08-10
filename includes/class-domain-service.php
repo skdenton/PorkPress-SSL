@@ -25,10 +25,20 @@ class Domain_Service {
         */
        protected bool $missing_credentials = false;
 
-       /**
-        * Whether the service is in dry-run mode.
-        */
-       protected bool $dry_run = false;
+/**
+ * Whether the service is in dry-run mode.
+ */
+protected bool $dry_run = false;
+
+/**
+ * Cached domain list for the current request.
+ *
+ * @var array|null
+ */
+protected ?array $domain_list_cache = null;
+
+private const DOMAIN_LIST_CACHE_KEY = 'porkpress_ssl_domain_list';
+private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
 
        /**
         * Constructor.
@@ -187,31 +197,62 @@ class Domain_Service {
         *
         * @return array|Porkbun_Client_Error
         */
-       public function list_domains( int $page = 1, int $per_page = 100 ) {
-               $result = $this->client->listDomains( $page, $per_page );
+      /**
+       * List domains.
+       *
+       * Results are cached for the duration of the request and persisted in a
+       * site transient for five minutes. Use
+       * {@see delete_site_transient()} with the `porkpress_ssl_domain_list`
+       * key to invalidate the cache when domain data changes.
+       *
+       * @param int $page     Page number.
+       * @param int $per_page Domains per page.
+       *
+       * @return array|Porkbun_Client_Error
+       */
+      public function list_domains( int $page = 1, int $per_page = 100 ) {
+              if ( null !== $this->domain_list_cache ) {
+                      return $this->domain_list_cache;
+              }
 
-               if ( $result instanceof Porkbun_Client_Error ) {
-                       return $result;
-               }
+              if ( function_exists( 'get_site_transient' ) ) {
+                      $cached = get_site_transient( self::DOMAIN_LIST_CACHE_KEY );
+                      if ( false !== $cached ) {
+                              $this->domain_list_cache = $cached;
+                              return $this->domain_list_cache;
+                      }
+              }
 
-               if ( isset( $result['domains'] ) && is_array( $result['domains'] ) ) {
-                       $result['domains'] = array_map(
-                               function ( $domain ) {
-                                       if ( isset( $domain['tld'] ) && ! isset( $domain['type'] ) ) {
-                                               $domain['type'] = $domain['tld'];
-                                       }
-                                       if ( isset( $domain['expireDate'] ) && ! isset( $domain['expiry'] ) ) {
-                                               $domain['expiry'] = $domain['expireDate'];
-                                       }
+              $result = $this->client->listDomains( $page, $per_page );
 
-                                       return $domain;
-                               },
-                               $result['domains']
-                       );
-               }
+              if ( $result instanceof Porkbun_Client_Error ) {
+                      return $result;
+              }
 
-               return $result;
-       }
+              if ( isset( $result['domains'] ) && is_array( $result['domains'] ) ) {
+                      $result['domains'] = array_map(
+                              function ( $domain ) {
+                                      if ( isset( $domain['tld'] ) && ! isset( $domain['type'] ) ) {
+                                              $domain['type'] = $domain['tld'];
+                                      }
+                                      if ( isset( $domain['expireDate'] ) && ! isset( $domain['expiry'] ) ) {
+                                              $domain['expiry'] = $domain['expireDate'];
+                                      }
+
+                                      return $domain;
+                              },
+                              $result['domains']
+                      );
+              }
+
+              $this->domain_list_cache = $result;
+
+              if ( function_exists( 'set_site_transient' ) ) {
+                      set_site_transient( self::DOMAIN_LIST_CACHE_KEY, $result, self::DOMAIN_LIST_CACHE_TTL );
+              }
+
+              return $result;
+      }
 
        /**
         * Attach a domain to a site.
@@ -533,39 +574,36 @@ KEY domain (domain)
        return false !== $result;
    }
 
-   /**
-    * Determine whether a domain is active in Porkbun.
-    *
-    * @param string $domain Domain name.
-    *
-    * @return bool True if the domain exists and is active, false otherwise.
-    */
-   public function is_domain_active( string $domain ): bool {
-       $result = $this->client->listDomains();
+  /**
+   * Determine whether a domain is active in Porkbun.
+   *
+   * Uses the API's single-domain endpoint to avoid fetching the full domain
+   * list.
+   *
+   * @param string $domain Domain name.
+   *
+   * @return bool True if the domain exists and is active, false otherwise.
+   */
+  public function is_domain_active( string $domain ): bool {
+       $result = $this->client->getDomain( $domain );
 
        if ( $result instanceof Porkbun_Client_Error ) {
-           // If the API fails, assume active to avoid false positives.
-           return true;
+               // If the API fails, assume active to avoid false positives.
+               return true;
        }
 
-       if ( empty( $result['domains'] ) || ! is_array( $result['domains'] ) ) {
-           return false;
+       if ( ! is_array( $result ) ) {
+               return false;
        }
 
-       foreach ( $result['domains'] as $info ) {
-           if ( ! isset( $info['domain'] ) ) {
-               continue;
-           }
+       $info = $result['domain'] ?? $result;
+       $status = strtoupper( $info['status'] ?? '' );
 
-           if ( strtolower( $info['domain'] ) === strtolower( $domain ) ) {
-               $status = strtoupper( $info['status'] ?? 'ACTIVE' );
-
-               return 'ACTIVE' === $status;
-           }
+       if ( '' === $status ) {
+               return false;
        }
 
-       // Domain not found.
-       return false;
+       return 'ACTIVE' === $status;
    }
 
 }
