@@ -174,3 +174,59 @@ function porkpress_ssl_map_meta_cap( $caps, $cap, $user_id ) {
         return $caps;
 }
 add_filter( 'map_meta_cap', 'porkpress_ssl_map_meta_cap', 10, 3 );
+
+/**
+ * Record a domain alias when a new site is created.
+ *
+ * @param int    $blog_id  Site ID.
+ * @param int    $user_id  User ID.
+ * @param string $domain   Site domain.
+ * @param string $path     Site path.
+ * @param int    $site_id  Network ID.
+ * @param array  $meta     Meta data for the site.
+ */
+function porkpress_ssl_handle_new_blog( $blog_id, $user_id, $domain, $path, $site_id, $meta ) {
+       $service = new \PorkPress\SSL\Domain_Service();
+       $service->add_alias( (int) $blog_id, $domain, true, 'active' );
+}
+add_action( 'wpmu_new_blog', 'porkpress_ssl_handle_new_blog', 10, 6 );
+
+/**
+ * Remove domain aliases when a site is deleted.
+ *
+ * @param int  $blog_id Site ID.
+ * @param bool $drop    Whether the site's tables should be dropped.
+ */
+function porkpress_ssl_handle_delete_blog( $blog_id, $drop ) {
+       $service = new \PorkPress\SSL\Domain_Service();
+       foreach ( $service->get_aliases( (int) $blog_id ) as $alias ) {
+               $service->delete_alias( (int) $blog_id, $alias['domain'] );
+       }
+}
+add_action( 'wpmu_delete_blog', 'porkpress_ssl_handle_delete_blog', 10, 2 );
+
+/**
+ * Flag aliases as archived when a site is archived.
+ *
+ * @param int $blog_id Site ID.
+ */
+function porkpress_ssl_handle_archive_blog( $blog_id ) {
+       $service = new \PorkPress\SSL\Domain_Service();
+       foreach ( $service->get_aliases( (int) $blog_id ) as $alias ) {
+               $service->update_alias( (int) $blog_id, $alias['domain'], array( 'status' => 'archived' ) );
+       }
+}
+add_action( 'archive_blog', 'porkpress_ssl_handle_archive_blog' );
+
+/**
+ * Restore alias status when a site is unarchived.
+ *
+ * @param int $blog_id Site ID.
+ */
+function porkpress_ssl_handle_unarchive_blog( $blog_id ) {
+       $service = new \PorkPress\SSL\Domain_Service();
+       foreach ( $service->get_aliases( (int) $blog_id ) as $alias ) {
+               $service->update_alias( (int) $blog_id, $alias['domain'], array( 'status' => 'active' ) );
+       }
+}
+add_action( 'unarchive_blog', 'porkpress_ssl_handle_unarchive_blog' );
