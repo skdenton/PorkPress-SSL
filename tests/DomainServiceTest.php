@@ -81,6 +81,21 @@ class MockWpdb {
         }
         return false;
     }
+
+    public function query( $sql ) {
+        if ( preg_match( "/UPDATE\s+(\w+)\s+SET\s+is_primary\s+=\s+CASE\s+WHEN\s+domain\s+=\s*'([^']+)'\s+THEN\s+1\s+ELSE\s+0\s+END\s+WHERE\s+site_id\s+=\s*(\d+)/i", $sql, $m ) ) {
+            $table  = $m[1];
+            $domain = $m[2];
+            $site   = (int) $m[3];
+            foreach ( $this->data[ $table ] as &$row ) {
+                if ( $row['site_id'] == $site ) {
+                    $row['is_primary'] = $row['domain'] === $domain ? 1 : 0;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
 }
 require_once __DIR__ . '/../includes/class-domain-service.php';
 require_once __DIR__ . '/../includes/class-porkbun-client.php';
@@ -144,6 +159,24 @@ class DomainServiceTest extends TestCase {
 
         $service->delete_alias( 1, 'example.com' );
         $this->assertCount( 0, $service->get_aliases( 1 ) );
+    }
+
+    public function testSetPrimaryAlias() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() {}
+        };
+
+        $service->add_alias( 1, 'one.com', true );
+        $service->add_alias( 1, 'two.com', false );
+
+        $service->set_primary_alias( 1, 'two.com' );
+        $aliases = $service->get_aliases( 1 );
+        $map     = array_column( $aliases, 'is_primary', 'domain' );
+        $this->assertSame( 1, $map['two.com'] );
+        $this->assertSame( 0, $map['one.com'] );
     }
 }
 
