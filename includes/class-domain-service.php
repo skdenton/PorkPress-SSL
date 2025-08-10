@@ -257,23 +257,34 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
        /**
         * Attach a domain to a site.
         *
-        * @param string $domain Domain name.
-       * @param int    $site_id Site ID.
-       *
-       * @return bool|Porkbun_Client_Error
-       */
-       public function attach_to_site( string $domain, int $site_id ) {
-               if ( function_exists( 'update_site_meta' ) ) {
-                       update_site_meta( $site_id, 'porkpress_domain', $domain );
-               }
+ * @param string   $domain Domain name.
+ * @param int      $site_id Site ID.
+ * @param int|null $ttl     Optional TTL override.
+ *
+ * @return bool|Porkbun_Client_Error
+ */
+public function attach_to_site( string $domain, int $site_id, ?int $ttl = null ) {
+if ( function_exists( 'update_site_meta' ) ) {
+update_site_meta( $site_id, 'porkpress_domain', $domain );
+}
 
-               $result = $this->add_alias( $site_id, $domain, true, 'active' );
-               if ( $result instanceof Porkbun_Client_Error ) {
-                       return $result;
-               }
+$result = $this->add_alias( $site_id, $domain, true, 'active' );
+if ( $result instanceof Porkbun_Client_Error ) {
+return $result;
+}
 
-               return true;
-       }
+$ttl = $ttl ?? 300;
+if ( function_exists( 'apply_filters' ) ) {
+$ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
+}
+
+$result = $this->create_a_record( $domain, $site_id, $ttl );
+if ( $result instanceof Porkbun_Client_Error ) {
+return $result;
+}
+
+return true;
+}
 
        /**
         * Create a new site and attach a domain as its primary alias.
@@ -360,13 +371,84 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
        }
 
        /**
-        * Determine whether a site has content.
+        * Create an A record pointing the domain to the network IP.
         *
-        * @param int $site_id Site ID.
+        * @param string $domain  Domain name.
+        * @param int    $site_id Site ID.
+        * @param int    $ttl     TTL for the record.
         *
-        * @return bool
+        * @return bool|Porkbun_Client_Error
         */
-       protected function site_has_content( int $site_id ): bool {
+       protected function create_a_record( string $domain, int $site_id, int $ttl ) {
+               $ip = $this->get_network_ip();
+               if ( ! $ip ) {
+                       return true;
+               }
+
+               $result = $this->client->createARecord( $domain, '', $ip, $ttl );
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       \PorkPress\SSL\Logger::error(
+                               'create_a_record',
+                               array(
+                                       'domain'  => $domain,
+                                       'site_id' => $site_id,
+                                       'ip'      => $ip,
+                                       'ttl'     => $ttl,
+                               ),
+                               $result->message
+                       );
+                       return $result;
+               }
+
+               return true;
+       }
+
+       /**
+        * Detect the network's IP address.
+        *
+        * @return string IPv4 address or empty string if unresolved.
+        */
+       protected function get_network_ip(): string {
+               $home = '';
+               if ( function_exists( 'network_home_url' ) ) {
+                       $home = network_home_url();
+               } elseif ( function_exists( 'home_url' ) ) {
+                       $home = home_url();
+               }
+
+               if ( ! $home ) {
+                       return '';
+               }
+
+               $parse_fn = function_exists( 'wp_parse_url' ) ? 'wp_parse_url' : 'parse_url';
+               $host     = (string) $parse_fn( $home, PHP_URL_HOST );
+               if ( ! $host ) {
+                       return '';
+               }
+
+               if ( function_exists( 'gethostbynamel' ) ) {
+                       $ips = gethostbynamel( $host );
+                       if ( is_array( $ips ) && ! empty( $ips ) ) {
+                               return (string) $ips[0];
+                       }
+               } elseif ( function_exists( 'gethostbyname' ) ) {
+                       $ip = gethostbyname( $host );
+                       if ( $ip !== $host ) {
+                               return $ip;
+                       }
+               }
+
+               return '';
+       }
+
+/**
+ * Determine whether a site has content.
+ *
+ * @param int $site_id Site ID.
+ *
+ * @return bool
+ */
+protected function site_has_content( int $site_id ): bool {
                if ( ! function_exists( 'switch_to_blog' ) || ! function_exists( 'restore_current_blog' ) || ! function_exists( 'get_posts' ) ) {
                        return false;
                }
