@@ -9,6 +9,7 @@ namespace PorkPress\SSL;
 
 use WP_CLI;
 use WP_CLI_Command;
+use WP_CLI\Formatter;
 
 /**
  * Manage SSL certificates via WP-CLI.
@@ -156,4 +157,80 @@ class CLI extends WP_CLI_Command {
 
                 WP_CLI::success( 'Certificate stored.' );
         }
+
+       /**
+        * Export logs.
+        *
+        * ## OPTIONS
+        *
+        * [--format=<format>]
+        * : Output format: csv or json. Default json.
+        *
+        * [--severity=<level>]
+        * : Filter by severity.
+        *
+        * [--limit=<number>]
+        * : Number of entries to include. Default 100. Use 0 for all.
+        *
+        * ## EXAMPLES
+        *
+        *     wp porkpress ssl export-logs --format=csv > logs.csv
+        *
+        * @when after_wp_load
+        *
+        * @param array $args       Positional arguments.
+        * @param array $assoc_args Associative arguments.
+        */
+       public function export_logs( $args, $assoc_args ) {
+               $format   = $assoc_args['format'] ?? 'json';
+               $severity = $assoc_args['severity'] ?? '';
+               $limit    = isset( $assoc_args['limit'] ) ? (int) $assoc_args['limit'] : 100;
+
+               $logs = Logger::get_logs( array( 'severity' => $severity, 'limit' => $limit ) );
+               foreach ( $logs as &$log ) {
+                       $user        = $log['user_id'] ? get_userdata( $log['user_id'] ) : null;
+                       $log['user'] = $user ? $user->user_login : '';
+                       $log['context'] = Logger::sanitize_context( $log['context'], false );
+               }
+
+               $fields = array( 'time', 'user', 'action', 'context', 'result', 'severity' );
+               if ( 'csv' === $format ) {
+                       $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+                       foreach ( $logs as &$log ) {
+                               $log['context'] = $encode( $log['context'] );
+                       }
+               }
+
+               $assoc_args['format'] = $format;
+               $formatter = new Formatter( $assoc_args, $fields );
+               $formatter->display_items( $logs );
+       }
+
+       /**
+        * Export domain alias mapping.
+        *
+        * ## OPTIONS
+        *
+        * [--format=<format>]
+        * : Output format: csv or json. Default json.
+        *
+        * ## EXAMPLES
+        *
+        *     wp porkpress ssl export-mapping --format=csv > mapping.csv
+        *
+        * @when after_wp_load
+        *
+        * @param array $args       Positional arguments.
+        * @param array $assoc_args Associative arguments.
+        */
+       public function export_mapping( $args, $assoc_args ) {
+               $format  = $assoc_args['format'] ?? 'json';
+               $service = new Domain_Service();
+               $aliases = $service->get_aliases();
+
+               $fields = array( 'site_id', 'domain', 'is_primary', 'status' );
+               $assoc_args['format'] = $format;
+               $formatter = new Formatter( $assoc_args, $fields );
+               $formatter->display_items( $aliases );
+       }
 }

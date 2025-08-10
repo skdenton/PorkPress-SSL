@@ -173,16 +173,41 @@ class Admin {
         /**
          * Render the domains tab for the network admin page.
          */
-        public function render_domains_tab() {
-                if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
-                        return;
-                }
+       public function render_domains_tab() {
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       return;
+               }
 
-                $search       = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
-                $status       = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
-                $expiry_window = isset( $_GET['expiry'] ) ? absint( wp_unslash( $_GET['expiry'] ) ) : 0;
+               if ( isset( $_GET['export'] ) ) {
+                       $export  = sanitize_key( wp_unslash( $_GET['export'] ) );
+                       if ( in_array( $export, array( 'mapping-csv', 'mapping-json' ), true ) ) {
+                               $svc     = new Domain_Service();
+                               $aliases = $svc->get_aliases();
+                               if ( 'mapping-csv' === $export ) {
+                                       header( 'Content-Type: text/csv' );
+                                       header( 'Content-Disposition: attachment; filename="porkpress-mapping.csv"' );
+                                       $fh = fopen( 'php://output', 'w' );
+                                       fputcsv( $fh, array( 'site_id', 'domain', 'is_primary', 'status' ) );
+                                       foreach ( $aliases as $alias ) {
+                                               fputcsv( $fh, array( $alias['site_id'], $alias['domain'], $alias['is_primary'], $alias['status'] ) );
+                                       }
+                                       exit;
+                               }
+                               if ( 'mapping-json' === $export ) {
+                                       header( 'Content-Type: application/json' );
+                                       header( 'Content-Disposition: attachment; filename="porkpress-mapping.json"' );
+                                       $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+                                       echo $encode( $aliases );
+                                       exit;
+                               }
+                       }
+               }
 
-               $service = new Domain_Service();
+               $search       = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+               $status       = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
+               $expiry_window = isset( $_GET['expiry'] ) ? absint( wp_unslash( $_GET['expiry'] ) ) : 0;
+
+              $service = new Domain_Service();
 
                $simulate_steps = '';
                if ( isset( $_POST['porkpress_ssl_simulate_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_simulate_nonce'] ), 'porkpress_ssl_simulate' ) ) {
@@ -290,14 +315,16 @@ class Admin {
                 echo '<input type="search" id="domain-search-input" name="s" value="' . esc_attr( $search ) . '" />';
                 submit_button( __( 'Search Domains', 'porkpress-ssl' ), '', '', false, array( 'id' => 'search-submit' ) );
                 echo '</p>';
-                echo '<p class="filter-box">';
-                echo '<label for="status-filter">' . esc_html__( 'Status', 'porkpress-ssl' ) . '</label> ';
-                echo '<input type="text" id="status-filter" name="status" value="' . esc_attr( $status ) . '" /> ';
-                echo '<label for="expiry-filter">' . esc_html__( 'Expiry within (days)', 'porkpress-ssl' ) . '</label> ';
-                echo '<input type="number" id="expiry-filter" class="small-text" name="expiry" value="' . esc_attr( $expiry_window ) . '" min="0" /> ';
-                submit_button( __( 'Filter', 'porkpress-ssl' ), '', '', false );
-                echo '</p>';
-                echo '</form>';
+               echo '<p class="filter-box">';
+               echo '<label for="status-filter">' . esc_html__( 'Status', 'porkpress-ssl' ) . '</label> ';
+               echo '<input type="text" id="status-filter" name="status" value="' . esc_attr( $status ) . '" /> ';
+               echo '<label for="expiry-filter">' . esc_html__( 'Expiry within (days)', 'porkpress-ssl' ) . '</label> ';
+               echo '<input type="number" id="expiry-filter" class="small-text" name="expiry" value="' . esc_attr( $expiry_window ) . '" min="0" /> ';
+               submit_button( __( 'Filter', 'porkpress-ssl' ), '', '', false );
+               echo '</p>';
+               echo '</form>';
+               echo '<p><a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'mapping-csv' ) ) ) . '">' . esc_html__( 'Export Mapping CSV', 'porkpress-ssl' ) . '</a> ';
+               echo '<a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'mapping-json' ) ) ) . '">' . esc_html__( 'Export Mapping JSON', 'porkpress-ssl' ) . '</a></p>';
 
                wp_enqueue_script( 'porkpress-domain-bulk', plugins_url( '../assets/domain-bulk.js', __FILE__ ), array( 'jquery' ), PORKPRESS_SSL_VERSION, true );
                wp_localize_script( 'porkpress-domain-bulk', 'porkpressBulk', array(
@@ -528,18 +555,34 @@ echo '</form>';
 
                 $severity = isset( $_GET['severity'] ) ? sanitize_key( wp_unslash( $_GET['severity'] ) ) : '';
 
-                if ( isset( $_GET['export'] ) && 'csv' === $_GET['export'] ) {
-                        $logs = Logger::get_logs( array( 'severity' => $severity, 'limit' => 0 ) );
-                        header( 'Content-Type: text/csv' );
-                        header( 'Content-Disposition: attachment; filename="porkpress-logs.csv"' );
-                        $fh = fopen( 'php://output', 'w' );
-                        fputcsv( $fh, array( 'time', 'user', 'action', 'context', 'result', 'severity' ) );
-                        foreach ( $logs as $log ) {
-                                $user = $log['user_id'] ? get_userdata( $log['user_id'] ) : null;
-                                fputcsv( $fh, array( $log['time'], $user ? $user->user_login : '', $log['action'], $log['context'], $log['result'], $log['severity'] ) );
-                        }
-                        exit;
-                }
+               if ( isset( $_GET['export'] ) ) {
+                       $export = sanitize_key( wp_unslash( $_GET['export'] ) );
+                       $logs   = Logger::get_logs( array( 'severity' => $severity, 'limit' => 0 ) );
+                       foreach ( $logs as &$log ) {
+                               $user        = $log['user_id'] ? get_userdata( $log['user_id'] ) : null;
+                               $log['user'] = $user ? $user->user_login : '';
+                               $log['context'] = Logger::sanitize_context( $log['context'], false );
+                               unset( $log['user_id'] );
+                       }
+                       if ( 'csv' === $export ) {
+                               header( 'Content-Type: text/csv' );
+                               header( 'Content-Disposition: attachment; filename="porkpress-logs.csv"' );
+                               $fh     = fopen( 'php://output', 'w' );
+                               fputcsv( $fh, array( 'time', 'user', 'action', 'context', 'result', 'severity' ) );
+                               $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+                               foreach ( $logs as $log ) {
+                                       fputcsv( $fh, array( $log['time'], $log['user'], $log['action'], $encode( $log['context'] ), $log['result'], $log['severity'] ) );
+                               }
+                               exit;
+                       }
+                       if ( 'json' === $export ) {
+                               header( 'Content-Type: application/json' );
+                               header( 'Content-Disposition: attachment; filename="porkpress-logs.json"' );
+                               $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+                               echo $encode( $logs );
+                               exit;
+                       }
+               }
 
                 $logs = Logger::get_logs( array( 'severity' => $severity ) );
 
@@ -551,10 +594,11 @@ echo '</form>';
                 foreach ( array( 'info', 'warn', 'error' ) as $sev ) {
                         echo '<option value="' . esc_attr( $sev ) . '"' . selected( $severity, $sev, false ) . '>' . esc_html( ucfirst( $sev ) ) . '</option>';
                 }
-                echo '</select> ';
-                submit_button( __( 'Filter', 'porkpress-ssl' ), 'secondary', '', false );
-                echo ' <a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'csv' ) ) ) . '">' . esc_html__( 'Export CSV', 'porkpress-ssl' ) . '</a>';
-                echo '</form>';
+               echo '</select> ';
+               submit_button( __( 'Filter', 'porkpress-ssl' ), 'secondary', '', false );
+               echo ' <a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'csv' ) ) ) . '">' . esc_html__( 'Export CSV', 'porkpress-ssl' ) . '</a>';
+               echo ' <a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'json' ) ) ) . '">' . esc_html__( 'Export JSON', 'porkpress-ssl' ) . '</a>';
+               echo '</form>';
 
                 echo '<table class="widefat fixed">';
                 echo '<thead><tr><th>' . esc_html__( 'Time', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'User', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Action', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Context', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Result', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Severity', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
@@ -568,7 +612,7 @@ echo '</form>';
                                 echo '<td>' . esc_html( $log['time'] ) . '</td>';
                                 echo '<td>' . esc_html( $user ? $user->user_login : '' ) . '</td>';
                                 echo '<td>' . esc_html( $log['action'] ) . '</td>';
-                                echo '<td><code>' . esc_html( $log['context'] ) . '</code></td>';
+                               echo '<td><code>' . esc_html( Logger::sanitize_context( $log['context'] ) ) . '</code></td>';
                                 echo '<td>' . esc_html( $log['result'] ) . '</td>';
                                 echo '<td>' . esc_html( $log['severity'] ) . '</td>';
                                 echo '</tr>';
