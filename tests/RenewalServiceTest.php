@@ -43,6 +43,7 @@ class RenewalServiceTest extends TestCase {
 
         require_once __DIR__ . '/../includes/class-logger.php';
         require_once __DIR__ . '/../includes/class-notifier.php';
+        require_once __DIR__ . '/../includes/class-certbot-helper.php';
         require_once __DIR__ . '/../includes/class-renewal-service.php';
 
         $root = sys_get_temp_dir() . '/porkpress-test';

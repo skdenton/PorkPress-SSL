@@ -75,6 +75,7 @@ require_once __DIR__ . '/../includes/class-ssl-service.php';
 require_once __DIR__ . '/../includes/class-domain-service.php';
 require_once __DIR__ . '/../includes/class-logger.php';
 require_once __DIR__ . '/../includes/class-notifier.php';
+require_once __DIR__ . '/../includes/class-certbot-helper.php';
 require_once __DIR__ . '/../includes/class-renewal-service.php';
 
 /**
