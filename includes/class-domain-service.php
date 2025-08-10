@@ -347,7 +347,42 @@ KEY domain (domain)
                        )
                );
 
-               return false !== $result;
+       return false !== $result;
+   }
+
+   /**
+    * Determine whether a domain is active in Porkbun.
+    *
+    * @param string $domain Domain name.
+    *
+    * @return bool True if the domain exists and is active, false otherwise.
+    */
+   public function is_domain_active( string $domain ): bool {
+       $result = $this->client->listDomains();
+
+       if ( $result instanceof Porkbun_Client_Error ) {
+           // If the API fails, assume active to avoid false positives.
+           return true;
        }
+
+       if ( empty( $result['domains'] ) || ! is_array( $result['domains'] ) ) {
+           return false;
+       }
+
+       foreach ( $result['domains'] as $info ) {
+           if ( ! isset( $info['domain'] ) ) {
+               continue;
+           }
+
+           if ( strtolower( $info['domain'] ) === strtolower( $domain ) ) {
+               $status = strtoupper( $info['status'] ?? 'ACTIVE' );
+
+               return 'ACTIVE' === $status;
+           }
+       }
+
+       // Domain not found.
+       return false;
+   }
 
 }
