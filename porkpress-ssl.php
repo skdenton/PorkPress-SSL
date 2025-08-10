@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       PorkPress SSL
  * Description:       Manage SSL certificates via Porkbun.
- * Version:           0.1.20
+ * Version:           0.1.21
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Network:           true
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const PORKPRESS_SSL_VERSION = '0.1.20';
+const PORKPRESS_SSL_VERSION = '0.1.21';
 const PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS = 'manage_network_domains';
 const PORKPRESS_SSL_CAP_REQUEST_DOMAIN       = 'request_domain';
 
@@ -38,6 +38,7 @@ require_once __DIR__ . '/includes/class-ssl-service.php';
 require_once __DIR__ . '/includes/class-logger.php';
 require_once __DIR__ . '/includes/class-reconciler.php';
 require_once __DIR__ . '/includes/class-txt-propagation-waiter.php';
+require_once __DIR__ . '/includes/class-renewal-service.php';
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
         require_once __DIR__ . '/includes/class-cli.php';
@@ -53,6 +54,7 @@ function porkpress_ssl_activate() {
        if ( ! wp_next_scheduled( 'porkpress_ssl_reconcile' ) ) {
                wp_schedule_event( time(), 'daily', 'porkpress_ssl_reconcile' );
        }
+       \PorkPress\SSL\Renewal_Service::maybe_schedule();
         // Grant request capability to site administrators on all sites.
         if ( is_multisite() ) {
                 foreach ( get_sites() as $site ) {
@@ -96,6 +98,10 @@ function porkpress_ssl_deactivate() {
        if ( $timestamp ) {
                wp_unschedule_event( $timestamp, 'porkpress_ssl_reconcile' );
        }
+       $renew = wp_next_scheduled( \PorkPress\SSL\Renewal_Service::CRON_HOOK );
+       if ( $renew ) {
+               wp_unschedule_event( $renew, \PorkPress\SSL\Renewal_Service::CRON_HOOK );
+       }
 }
 register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
 
@@ -115,17 +121,18 @@ function porkpress_ssl_init() {
                \PorkPress\SSL\Domain_Service::create_alias_table();
        }
 
-        $admin = new \PorkPress\SSL\Admin();
-       $admin->init();
+       $admin = new \PorkPress\SSL\Admin();
+      $admin->init();
+      \PorkPress\SSL\Renewal_Service::maybe_schedule();
 
-       if ( is_network_admin() && isset( $_GET['page'] ) && 'porkpress-ssl' === $_GET['page'] ) {
+      if ( is_network_admin() && isset( $_GET['page'] ) && 'porkpress-ssl' === $_GET['page'] ) {
                add_filter(
                        'get_site_icon_url',
                        function ( $url ) {
                                return set_url_scheme( $url, 'https' );
                        }
                );
-       }
+      }
 }
 add_action( 'plugins_loaded', 'porkpress_ssl_init' );
 
@@ -146,6 +153,7 @@ add_action( 'porkpress_ssl_reconcile', function () {
 } );
 
 add_action( 'porkpress_ssl_run_issuance', array( '\\PorkPress\\SSL\\SSL_Service', 'run_queue' ) );
+add_action( \PorkPress\SSL\Renewal_Service::CRON_HOOK, array( '\\PorkPress\\SSL\\Renewal_Service', 'run' ) );
 
 /**
  * Map meta capabilities for the plugin.
