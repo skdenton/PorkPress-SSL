@@ -20,7 +20,23 @@ class Admin {
                 add_action( 'network_admin_menu', array( $this, 'register_network_menu' ) );
                 add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
                add_action( 'wp_ajax_porkpress_ssl_bulk_action', array( $this, 'handle_bulk_action' ) );
+               add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
+               add_action( 'network_admin_notices', array( $this, 'sunrise_notice' ) );
         }
+
+       /**
+        * Display a notice if SUNRISE is not enabled.
+        */
+       public function sunrise_notice() {
+               if ( ! is_multisite() || defined( 'SUNRISE' ) || ! current_user_can( 'manage_network' ) ) {
+                       return;
+               }
+
+               printf(
+                       '<div class="notice notice-warning"><p>%s</p></div>',
+                       esc_html__( "Add define('SUNRISE', true); to wp-config.php to enable domain aliasing.", 'porkpress-ssl' )
+               );
+       }
 
         /**
          * Register the network admin menu.
