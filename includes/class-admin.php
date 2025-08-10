@@ -79,12 +79,13 @@ class Admin {
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'PorkPress SSL', 'porkpress-ssl' ) . '</h1>';
 		echo '<h2 class="nav-tab-wrapper">';
-		$tabs = array(
-			'dashboard' => __( 'Dashboard', 'porkpress-ssl' ),
-			'domains'   => __( 'Domains', 'porkpress-ssl' ),
-			'settings'  => __( 'Settings', 'porkpress-ssl' ),
-			'logs'      => __( 'Logs', 'porkpress-ssl' ),
-		);
+               $tabs = array(
+                       'dashboard' => __( 'Dashboard', 'porkpress-ssl' ),
+                       'sites'     => __( 'Sites', 'porkpress-ssl' ),
+                       'domains'   => __( 'Domains', 'porkpress-ssl' ),
+                       'settings'  => __( 'Settings', 'porkpress-ssl' ),
+                       'logs'      => __( 'Logs', 'porkpress-ssl' ),
+               );
 
 		foreach ( $tabs as $tab => $label ) {
 			$class = ( $active_tab === $tab ) ? ' nav-tab-active' : '';
@@ -98,21 +99,24 @@ class Admin {
 
                 echo '</h2>';
 
-                switch ( $active_tab ) {
-                        case 'domains':
-                                $this->render_domains_tab();
-                                break;
-                        case 'settings':
-                                $this->render_settings_tab();
-                                break;
-                        case 'logs':
-                                $this->render_logs_tab();
-                                break;
-                        case 'dashboard':
-                        default:
-                                $this->render_dashboard_tab();
-                                break;
-                }
+               switch ( $active_tab ) {
+                       case 'sites':
+                               $this->render_sites_tab();
+                               break;
+                       case 'domains':
+                               $this->render_domains_tab();
+                               break;
+                       case 'settings':
+                               $this->render_settings_tab();
+                               break;
+                       case 'logs':
+                               $this->render_logs_tab();
+                               break;
+                       case 'dashboard':
+                       default:
+                               $this->render_dashboard_tab();
+                               break;
+               }
 
                 echo '</div>';
         }
@@ -169,6 +173,69 @@ class Admin {
                 }
                 echo '</div>';
         }
+
+       /**
+        * Render the sites tab for the network admin page.
+        */
+       public function render_sites_tab() {
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       return;
+               }
+
+               require_once ABSPATH . 'wp-admin/includes/class-wp-ms-sites-list-table.php';
+
+               add_filter( 'wpmu_blogs_columns', array( $this, 'add_primary_domain_column' ) );
+               add_action( 'manage_sites_custom_column', array( $this, 'manage_primary_domain_column' ), 10, 2 );
+
+               $table = new \WP_MS_Sites_List_Table();
+               $table->prepare_items();
+               echo '<form method="post">';
+               $table->display();
+               echo '</form>';
+
+               remove_filter( 'wpmu_blogs_columns', array( $this, 'add_primary_domain_column' ) );
+               remove_action( 'manage_sites_custom_column', array( $this, 'manage_primary_domain_column' ), 10 );
+       }
+
+       /**
+        * Add primary domain column to the sites list table.
+        *
+        * @param array $columns Existing columns.
+        * @return array
+        */
+       public function add_primary_domain_column( array $columns ): array {
+               $columns['primary_domain'] = __( 'Primary Domain', 'porkpress-ssl' );
+               return $columns;
+       }
+
+       /**
+        * Render primary domain column content.
+        *
+        * @param string $column  Column name.
+        * @param int    $site_id Site ID.
+        */
+       public function manage_primary_domain_column( string $column, int $site_id ) {
+               if ( 'primary_domain' !== $column ) {
+                       return;
+               }
+
+               $service = new Domain_Service();
+               $aliases = $service->get_aliases( $site_id );
+               $primary = '';
+               foreach ( $aliases as $alias ) {
+                       if ( ! empty( $alias['is_primary'] ) ) {
+                               $primary = $alias['domain'];
+                               break;
+                       }
+               }
+
+               $url = network_admin_url( 'admin.php?page=porkpress-site-aliases&id=' . $site_id );
+               if ( $primary ) {
+                       printf( '<a href="%1$s">%2$s</a>', esc_url( $url ), esc_html( $primary ) );
+               } else {
+                       printf( '<a href="%1$s">%2$s</a>', esc_url( $url ), esc_html__( 'Manage Aliases', 'porkpress-ssl' ) );
+               }
+       }
 
         /**
          * Render the domains tab for the network admin page.
