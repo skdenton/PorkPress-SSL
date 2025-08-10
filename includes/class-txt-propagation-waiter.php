@@ -27,7 +27,15 @@ class TXT_Propagation_Waiter {
          *
          * @param array<int, string> $resolvers Resolver IPs.
          */
-        public function __construct( array $resolvers = array( '8.8.8.8', '1.1.1.1' ) ) {
+        public function __construct( array $resolvers = array() ) {
+                if ( empty( $resolvers ) ) {
+                        $resolvers = array( '8.8.8.8', '1.1.1.1' );
+                }
+
+                if ( function_exists( 'apply_filters' ) ) {
+                        $resolvers = apply_filters( 'porkpress_ssl_txt_propagation_resolvers', $resolvers );
+                }
+
                 $this->resolvers = $resolvers;
         }
 
@@ -82,8 +90,10 @@ class TXT_Propagation_Waiter {
                 $cmd = sprintf( 'dig +short @%s TXT %s', escapeshellarg( $resolver ), escapeshellarg( $name ) );
                 $output = array();
                 $status = 1;
-                @exec( $cmd, $output, $status );
+                exec( $cmd, $output, $status );
                 if ( 0 !== $status ) {
+                        $message = sprintf( 'dig command failed for resolver %s (exit code %d)', $resolver, $status );
+                        trigger_error( $message, E_USER_WARNING );
                         return array();
                 }
                 $records = array();
