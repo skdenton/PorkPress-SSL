@@ -183,6 +183,16 @@ class Admin {
                submit_button( __( 'Reconcile Now', 'porkpress-ssl' ), 'secondary', 'reconcile_now', false );
                echo '</form>';
 
+               if ( isset( $_POST['porkpress_ssl_issue_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_issue_nonce'] ), 'porkpress_ssl_issue' ) ) {
+                       SSL_Service::run_queue();
+                       echo '<div class="updated"><p>' . esc_html__( 'Issuance tasks processed.', 'porkpress-ssl' ) . '</p></div>';
+               }
+
+               echo '<form method="post" style="margin-bottom:1em;">';
+               wp_nonce_field( 'porkpress_ssl_issue', 'porkpress_ssl_issue_nonce' );
+               submit_button( __( 'Run now', 'porkpress-ssl' ), 'secondary', 'issue_now', false );
+               echo '</form>';
+
                $result = $service->list_domains();
                 if ( $result instanceof Porkbun_Client_Error ) {
                         $message = $result->message;
