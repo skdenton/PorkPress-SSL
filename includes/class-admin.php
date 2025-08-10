@@ -456,7 +456,7 @@ class Admin {
                echo '<option value="attach">' . esc_html__( 'Attach to site', 'porkpress-ssl' ) . '</option>';
                echo '<option value="detach">' . esc_html__( 'Detach from site', 'porkpress-ssl' ) . '</option>';
                echo '</select> ';
-               echo '<input type="number" name="site_id" class="small-text" placeholder="' . esc_attr__( 'Site ID', 'porkpress-ssl' ) . '" /> ';
+               echo '<input type="text" name="site_name" class="regular-text" placeholder="' . esc_attr__( 'Site Name', 'porkpress-ssl' ) . '" /> ';
                submit_button( __( 'Apply', 'porkpress-ssl' ), 'secondary', 'apply', false );
                echo '</div>';
                echo '<div id="porkpress-domain-progress" class="alignleft actions"></div>';
@@ -474,13 +474,37 @@ class Admin {
                        wp_send_json_error( 'no_permission' );
                }
 
-               $domain   = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
-               $action   = isset( $_POST['bulk_action'] ) ? sanitize_key( wp_unslash( $_POST['bulk_action'] ) ) : '';
-               $site_id  = isset( $_POST['site_id'] ) ? absint( wp_unslash( $_POST['site_id'] ) ) : 0;
-               $title    = isset( $_POST['new_site_title'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_title'] ) ) : '';
-               $email    = isset( $_POST['new_site_email'] ) ? sanitize_email( wp_unslash( $_POST['new_site_email'] ) ) : '';
-               $template = isset( $_POST['new_site_template'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_template'] ) ) : '';
-               $override = isset( $_POST['override'] ) ? sanitize_text_field( wp_unslash( $_POST['override'] ) ) : '';
+               $domain    = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
+               $action    = isset( $_POST['bulk_action'] ) ? sanitize_key( wp_unslash( $_POST['bulk_action'] ) ) : '';
+               $site_name = isset( $_POST['site_name'] ) ? sanitize_text_field( wp_unslash( $_POST['site_name'] ) ) : '';
+               $title     = isset( $_POST['new_site_title'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_title'] ) ) : '';
+               $email     = isset( $_POST['new_site_email'] ) ? sanitize_email( wp_unslash( $_POST['new_site_email'] ) ) : '';
+               $template  = isset( $_POST['new_site_template'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_template'] ) ) : '';
+               $override  = isset( $_POST['override'] ) ? sanitize_text_field( wp_unslash( $_POST['override'] ) ) : '';
+
+               $site_id = 0;
+               if ( $site_name ) {
+                       $sites = get_sites(
+                               array(
+                                       'search' => $site_name,
+                                       'number' => 1,
+                               )
+                       );
+                       $total = get_sites(
+                               array(
+                                       'search' => $site_name,
+                                       'count'  => true,
+                               )
+                       );
+
+                       if ( 0 === (int) $total ) {
+                               wp_send_json_error( 'site_not_found' );
+                       } elseif ( 1 < (int) $total ) {
+                               wp_send_json_error( 'multiple_sites_found' );
+                       }
+
+                       $site_id = (int) $sites[0]->blog_id;
+               }
 
                $service = new Domain_Service();
 

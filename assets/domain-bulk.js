@@ -3,7 +3,7 @@ jQuery(function($){
         e.preventDefault();
         var domains = $('input[name="domains[]"]:checked').map(function(){return $(this).val();}).get();
         var action = $('select[name="bulk_action"]').val();
-        var site = $('input[name="site_id"]').val();
+        var site = $('input[name="site_name"]').val();
         if(!domains.length || !action){return;}
         var override = '';
         if(action === 'detach'){
@@ -24,7 +24,7 @@ jQuery(function($){
                 nonce: porkpressBulk.nonce,
                 domain: domain,
                 bulk_action: action,
-                site_id: site,
+                site_name: site,
                 override: override
             }, function(resp){
                 processed++;
