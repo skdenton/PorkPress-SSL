@@ -75,9 +75,109 @@ class Domain_Service {
         /**
          * Whether the service has the required API credentials.
          */
-        public function has_credentials(): bool {
-                return ! $this->missing_credentials;
-        }
+       public function has_credentials(): bool {
+               return ! $this->missing_credentials;
+       }
+
+       /**
+        * Perform a DNS health check for a domain.
+        *
+        * Resolves A, AAAA and CNAME records and verifies they point to the
+        * expected host or IP of this network. If a mismatch is detected, a
+        * WP_Error is returned with a descriptive message.
+        *
+        * @param string $domain Domain name to check.
+        *
+        * @return true|\WP_Error True if healthy, error on mismatch or lookup failure.
+        */
+       public function check_dns_health( string $domain ) {
+               if ( ! function_exists( 'dns_get_record' ) ) {
+                       return true;
+               }
+
+               $home = '';
+               if ( function_exists( 'network_home_url' ) ) {
+                       $home = network_home_url();
+               } elseif ( function_exists( 'home_url' ) ) {
+                       $home = home_url();
+               }
+
+               if ( ! $home ) {
+                       return true;
+               }
+
+               $parse        = function_exists( 'wp_parse_url' ) ? 'wp_parse_url' : 'parse_url';
+               $expected_host = (string) $parse( $home, PHP_URL_HOST );
+
+               if ( ! $expected_host ) {
+                       return true;
+               }
+
+               $expected_ipv4 = function_exists( 'gethostbynamel' ) ? (array) gethostbynamel( $expected_host ) : array();
+               $expected_ipv6 = array();
+               if ( function_exists( 'dns_get_record' ) ) {
+                       $ipv6_records = dns_get_record( $expected_host, DNS_AAAA );
+                       if ( is_array( $ipv6_records ) ) {
+                               foreach ( $ipv6_records as $r ) {
+                                       if ( ! empty( $r['ipv6'] ) ) {
+                                               $expected_ipv6[] = $r['ipv6'];
+                                       }
+                               }
+                       }
+               }
+
+               $records = dns_get_record( $domain, DNS_A | DNS_AAAA | DNS_CNAME );
+               if ( false === $records || ! is_array( $records ) || empty( $records ) ) {
+                       return new \WP_Error( 'dns_lookup_failed', __( 'DNS lookup failed or returned no records.', 'porkpress-ssl' ) );
+               }
+
+               foreach ( $records as $record ) {
+                       switch ( $record['type'] ) {
+                               case 'A':
+                                       if ( ! in_array( $record['ip'], $expected_ipv4, true ) ) {
+                                               return new \WP_Error(
+                                                       'dns_mismatch',
+                                                       sprintf(
+                                                               __( 'Domain %1$s points to %2$s instead of %3$s.', 'porkpress-ssl' ),
+                                                               $domain,
+                                                               $record['ip'],
+                                                               $expected_host
+                                                       )
+                                               );
+                                       }
+                                       break;
+                               case 'AAAA':
+                                       if ( ! in_array( $record['ipv6'], $expected_ipv6, true ) ) {
+                                               return new \WP_Error(
+                                                       'dns_mismatch',
+                                                       sprintf(
+                                                               __( 'Domain %1$s points to %2$s instead of %3$s.', 'porkpress-ssl' ),
+                                                               $domain,
+                                                               $record['ipv6'],
+                                                               $expected_host
+                                                       )
+                                               );
+                                       }
+                                       break;
+                               case 'CNAME':
+                                       $target = rtrim( $record['target'], '.' );
+                                       if ( $target !== $expected_host ) {
+                                               return new \WP_Error(
+                                                       'dns_mismatch',
+                                                       sprintf(
+                                                               __( 'Domain %1$s CNAMEs to %2$s instead of %3$s.', 'porkpress-ssl' ),
+                                                               $domain,
+                                                               $target,
+                                                               $expected_host
+                                                       )
+                                               );
+                                       }
+                                       break;
+                       }
+               }
+
+               return true;
+       }
 
         /**
          * List domains.

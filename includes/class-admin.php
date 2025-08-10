@@ -247,24 +247,21 @@ class Admin {
                echo '<thead><tr>';
                echo '<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all" /></td>';
                echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
-               echo '<th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
                echo '</tr></thead><tbody>';
 
                 if ( empty( $domains ) ) {
-                       echo '<tr><td colspan="5">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+               echo '<tr><td colspan="4">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
                 } else {
                         foreach ( $domains as $domain ) {
-                                $name       = $domain['domain'] ?? $domain['name'] ?? '';
-                                $type       = $domain['type'] ?? '';
-                                $expiry     = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
-                                $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
+                               $name       = $domain['domain'] ?? $domain['name'] ?? '';
+                               $expiry     = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
+                               $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
 
                                echo '<tr>';
                                echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
                                echo '<td>' . esc_html( $name ) . '</td>';
-                               echo '<td>' . esc_html( $type ) . '</td>';
                                echo '<td>' . esc_html( $expiry ) . '</td>';
                                echo '<td>' . esc_html( $dns_status ) . '</td>';
                                echo '</tr>';
@@ -308,6 +305,13 @@ class Admin {
 
                switch ( $action ) {
                        case 'attach':
+                               if ( 'CONFIRM' !== strtoupper( $override ) ) {
+                                       $check = $service->check_dns_health( $domain );
+                                       if ( is_wp_error( $check ) ) {
+                                               wp_send_json_error( $check->get_error_message() );
+                                       }
+                               }
+
                                if ( $site_id > 0 ) {
                                        $result = $service->attach_to_site( $domain, $site_id );
                                } else {

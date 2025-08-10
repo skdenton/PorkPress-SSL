@@ -9,6 +9,9 @@ jQuery(function($){
         if(action === 'detach'){
             override = prompt('Type CONFIRM to detach selected domains');
             if(override !== 'CONFIRM'){return;}
+        } else if(action === 'attach'){
+            override = prompt('Type CONFIRM to override DNS check');
+            if(override === null){return;}
         }
         var total = domains.length, processed = 0;
         var $progress = $('#porkpress-domain-progress');
@@ -25,7 +28,10 @@ jQuery(function($){
                 override: override
             }, function(resp){
                 processed++;
-                if(!resp.success){console.error('Action failed', domain, resp.data);}
+                if(!resp.success){
+                    console.error('Action failed', domain, resp.data);
+                    alert('Action failed for ' + domain + ': ' + resp.data);
+                }
                 $progress.text(processed + '/' + total);
                 next();
             });
