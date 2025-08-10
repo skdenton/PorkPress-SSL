@@ -30,3 +30,10 @@ the active certificate. By default these roots are `/etc/letsencrypt` and
 define('PORKPRESS_CERT_ROOT', '/etc/letsencrypt');
 define('PORKPRESS_STATE_ROOT', '/var/lib/porkpress-ssl');
 ```
+
+## Multisite lifecycle
+
+PorkPress SSL listens for WordPress multisite events and updates its domain
+alias table automatically. When a site is created, deleted, archived or
+restored the plugin adjusts aliases and queues certificate issuance so SSL
+coverage remains in sync with the network.
