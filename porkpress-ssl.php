@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       PorkPress SSL
  * Description:       Manage SSL certificates via Porkbun.
- * Version:           0.1.17
+ * Version:           0.1.18
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Network:           true
