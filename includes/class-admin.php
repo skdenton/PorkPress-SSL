@@ -403,6 +403,8 @@ update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
                 'Settings saved'
             );
 
+            \PorkPress\SSL\Renewal_Service::maybe_schedule( true );
+
 echo '<div class="updated"><p>' . esc_html__( 'Settings saved.', 'porkpress-ssl' ) . '</p></div>';
 }
 
