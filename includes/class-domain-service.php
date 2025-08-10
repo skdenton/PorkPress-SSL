@@ -13,31 +13,64 @@ defined( 'ABSPATH' ) || exit;
  * Class Domain_Service
  */
 class Domain_Service {
-        /**
-         * Porkbun API client.
-         *
-         * @var Porkbun_Client
-         */
-        protected Porkbun_Client $client;
+       /**
+        * Porkbun API client.
+        *
+        * @var Porkbun_Client
+        */
+       protected Porkbun_Client $client;
 
-        /**
-         * Whether the API credentials are missing.
-         */
-        protected bool $missing_credentials = false;
+       /**
+        * Whether the API credentials are missing.
+        */
+       protected bool $missing_credentials = false;
 
-        /**
-         * Constructor.
-         */
-        public function __construct() {
-                $api_key    = defined( 'PORKPRESS_API_KEY' ) ? PORKPRESS_API_KEY : get_site_option( 'porkpress_ssl_api_key', '' );
-                $api_secret = defined( 'PORKPRESS_API_SECRET' ) ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
+       /**
+        * Whether the service is in dry-run mode.
+        */
+       protected bool $dry_run = false;
 
-                if ( empty( $api_key ) || empty( $api_secret ) ) {
-                        $this->missing_credentials = true;
-                }
+       /**
+        * Constructor.
+        *
+        * @param Porkbun_Client|null $client  Optional client instance.
+        * @param bool|null           $dry_run Force dry-run mode.
+        */
+       public function __construct( ?Porkbun_Client $client = null, ?bool $dry_run = null ) {
+               $this->dry_run = $dry_run ?? (bool) get_site_option( 'porkpress_ssl_dry_run', 0 );
 
-                $this->client = new Porkbun_Client( $api_key, $api_secret );
-        }
+               $api_key    = defined( 'PORKPRESS_API_KEY' ) ? PORKPRESS_API_KEY : get_site_option( 'porkpress_ssl_api_key', '' );
+               $api_secret = defined( 'PORKPRESS_API_SECRET' ) ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
+
+               $this->missing_credentials = empty( $api_key ) || empty( $api_secret );
+               if ( $this->dry_run ) {
+                       $this->missing_credentials = false;
+               }
+
+               if ( $client ) {
+                       $this->client = $client;
+               } else {
+                       $this->client = $this->dry_run
+                               ? new Porkbun_Client_DryRun( $api_key, $api_secret )
+                               : new Porkbun_Client( $api_key, $api_secret );
+               }
+       }
+
+       /**
+        * Whether the service is in dry-run mode.
+        */
+       public function is_dry_run(): bool {
+               return $this->dry_run;
+       }
+
+       /**
+        * Retrieve recorded plan steps when in dry-run mode.
+        *
+        * @return array<int, array<string, mixed>>
+        */
+       public function get_plan(): array {
+               return $this->client instanceof Porkbun_Client_DryRun ? $this->client->plan : array();
+       }
 
         /**
          * Whether the service has the required API credentials.
