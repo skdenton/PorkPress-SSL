@@ -110,10 +110,63 @@ class Admin {
                                 break;
                         case 'dashboard':
                         default:
-                                echo '<p>' . esc_html__( 'Dashboard content coming soon.', 'porkpress-ssl' ) . '</p>';
+                                $this->render_dashboard_tab();
                                 break;
                 }
 
+                echo '</div>';
+        }
+
+        /**
+         * Render the dashboard tab for the network admin page.
+         */
+        public function render_dashboard_tab() {
+                if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                        return;
+                }
+
+                $service         = new Domain_Service();
+                $domains         = $service->list_domains();
+                $total_domains   = 0;
+                $upcoming_expiry = 0;
+                if ( ! ( $domains instanceof Porkbun_Client_Error ) && ! empty( $domains['domains'] ) ) {
+                        $total_domains = count( $domains['domains'] );
+                        $threshold     = time() + 30 * DAY_IN_SECONDS;
+                        foreach ( $domains['domains'] as $domain ) {
+                                if ( ! empty( $domain['expiry'] ) ) {
+                                        $expiry = strtotime( $domain['expiry'] );
+                                        if ( $expiry && $expiry <= $threshold ) {
+                                                $upcoming_expiry++;
+                                        }
+                                }
+                        }
+                }
+
+                $mapped = count( $service->get_aliases() );
+
+                $reconciler  = new Reconciler( $service );
+                $drift       = $reconciler->reconcile_all( false );
+                $drift_count = count( $drift['missing_aliases'] ) + count( $drift['stray_aliases'] ) + count( $drift['disabled_sites'] );
+
+                global $wpdb;
+                $table          = Logger::get_table_name();
+                $ssl_log        = $wpdb->get_row( $wpdb->prepare( "SELECT time, result FROM {$table} WHERE action = %s ORDER BY time DESC LIMIT 1", 'issue_certificate' ), ARRAY_A );
+                $ssl_status     = $ssl_log ? $ssl_log['time'] . ' (' . $ssl_log['result'] . ')' : __( 'Never', 'porkpress-ssl' );
+                $reconcile_log  = $wpdb->get_row( $wpdb->prepare( "SELECT time, result FROM {$table} WHERE action = %s ORDER BY time DESC LIMIT 1", 'reconcile' ), ARRAY_A );
+                $reconcile_stat = $reconcile_log ? $reconcile_log['time'] . ' (' . $reconcile_log['result'] . ')' : __( 'Never', 'porkpress-ssl' );
+
+                echo '<div style="display:flex; flex-wrap:wrap; gap:1em;">';
+                $cards = array(
+                        __( 'Total Porkbun Domains', 'porkpress-ssl' )          => number_format_i18n( $total_domains ),
+                        __( 'Mapped Domains', 'porkpress-ssl' )                => number_format_i18n( $mapped ),
+                        __( 'Drift Alerts', 'porkpress-ssl' )                 => number_format_i18n( $drift_count ),
+                        __( 'Upcoming Expiries (≤30 days)', 'porkpress-ssl' ) => number_format_i18n( $upcoming_expiry ),
+                        __( 'Last SSL Run Status', 'porkpress-ssl' )          => $ssl_status,
+                        __( 'Last Reconcile', 'porkpress-ssl' )              => $reconcile_stat,
+                );
+                foreach ( $cards as $label => $value ) {
+                        echo '<div class="card" style="flex:1 1 200px;"><h2>' . esc_html( $label ) . '</h2><p>' . esc_html( $value ) . '</p></div>';
+                }
                 echo '</div>';
         }
 
