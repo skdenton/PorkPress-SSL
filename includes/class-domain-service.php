@@ -221,6 +221,29 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
     }
 
     /**
+     * Queue issuance for a site, accounting for network wildcards.
+     *
+     * If the network wildcard option is enabled and the provided domain is a
+     * subdomain of {@see DOMAIN_CURRENT_SITE}, the main network certificate is
+     * queued instead of the specific site.
+     *
+     * @param int    $site_id Site ID.
+     * @param string $domain  Domain name.
+     */
+    protected function queue_wildcard_aware_issuance( int $site_id, string $domain ): void {
+        if ( function_exists( 'get_site_option' ) && defined( 'DOMAIN_CURRENT_SITE' ) ) {
+            if ( get_site_option( 'porkpress_ssl_network_wildcard', 0 ) ) {
+                $suffix = '.' . DOMAIN_CURRENT_SITE;
+                if ( substr( $domain, -strlen( $suffix ) ) === $suffix ) {
+                    SSL_Service::queue_issuance( 0 );
+                    return;
+                }
+            }
+        }
+        SSL_Service::queue_issuance( $site_id );
+    }
+
+    /**
      * List domains.
      *
      * Results are cached for the duration of the request and persisted in a
@@ -700,7 +723,7 @@ KEY domain (domain)
                        return $dns;
                }
 
-               SSL_Service::queue_issuance( $site_id );
+               $this->queue_wildcard_aware_issuance( $site_id, $domain );
                $this->clear_domain_cache();
                return true;
        }
@@ -780,7 +803,7 @@ KEY domain (domain)
                );
 
                if ( false !== $result ) {
-                       SSL_Service::queue_issuance( $site_id );
+                       $this->queue_wildcard_aware_issuance( $site_id, $domain );
                        return true;
                }
 
@@ -816,7 +839,7 @@ KEY domain (domain)
                        return $dns;
                }
 
-               SSL_Service::queue_issuance( $site_id );
+               $this->queue_wildcard_aware_issuance( $site_id, $domain );
                $this->clear_domain_cache();
                return true;
        }

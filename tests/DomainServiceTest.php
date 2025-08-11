@@ -16,6 +16,9 @@ if ( ! function_exists( 'network_home_url' ) ) {
 if ( ! function_exists( 'home_url' ) ) {
     function home_url() { return 'https://expected.test'; }
 }
+if ( ! defined( 'DOMAIN_CURRENT_SITE' ) ) {
+    define( 'DOMAIN_CURRENT_SITE', 'expected.test' );
+}
 if ( ! function_exists( 'wp_parse_url' ) ) {
     function wp_parse_url( $url, $component = -1 ) { return parse_url( $url, $component ); }
 }
@@ -424,6 +427,26 @@ class DomainServiceTest extends TestCase {
         $service->delete_alias( 1, 'example.com' );
 
         $this->assertSame( array( 1, 2 ), $client->deleted );
+    }
+
+    public function testAddAliasQueuesWildcardForSubdomain() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+        update_site_option( 'porkpress_ssl_network_wildcard', 1 );
+        \PorkPress\SSL\SSL_Service::clear_queue();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
+        };
+
+        $service->add_alias( 2, 'sub.expected.test', true, 'active' );
+
+        $this->assertSame( array( 0 ), \PorkPress\SSL\SSL_Service::get_queue() );
+
+        \PorkPress\SSL\SSL_Service::clear_queue();
+        update_site_option( 'porkpress_ssl_network_wildcard', 0 );
     }
 
     public function testCheckDnsHealthFailsWhenNoARecord() {

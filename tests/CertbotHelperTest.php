@@ -15,4 +15,15 @@ class CertbotHelperTest extends TestCase {
         $this->assertStringContainsString( "-d 'example.com'", $cmd );
         $this->assertStringContainsString( "-d 'www.example.com'", $cmd );
     }
+
+    public function testBuildCommandAllowsWildcardDomains() {
+        if ( ! defined( 'ABSPATH' ) ) {
+            define( 'ABSPATH', __DIR__ );
+        }
+        require_once __DIR__ . '/../includes/class-certbot-helper.php';
+
+        $cmd = \PorkPress\SSL\Certbot_Helper::build_command( [ '*.example.com' ], 'test', false, false );
+
+        $this->assertStringContainsString( "-d '*.example.com'", $cmd );
+    }
 }
