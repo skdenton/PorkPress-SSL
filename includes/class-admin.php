@@ -691,9 +691,13 @@ if ( ! $state_root_locked && isset( $_POST['porkpress_state_root'] ) ) {
 update_site_option( 'porkpress_ssl_state_root', sanitize_text_field( wp_unslash( $_POST['porkpress_state_root'] ) ) );
 }
 
+$network_wildcard = isset( $_POST['porkpress_network_wildcard'] ) ? 1 : 0;
+update_site_option( 'porkpress_ssl_network_wildcard', $network_wildcard );
+
 $cert_name = get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
 $state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
+$network_wildcard = (bool) get_site_option( 'porkpress_ssl_network_wildcard', 0 );
 
             $auto_reconcile = isset( $_POST['porkpress_auto_reconcile'] ) ? 1 : 0;
             update_site_option( 'porkpress_ssl_auto_reconcile', $auto_reconcile );
@@ -720,6 +724,7 @@ $state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_S
                     'txt_interval'       => $txt_interval,
                     'auto_reconcile'     => (bool) $auto_reconcile,
                     'dry_run'            => (bool) $dry_run,
+                    'network_wildcard'   => (bool) $network_wildcard,
                     'apache_reload'      => (bool) $apache_reload,
                     'cert_name'          => $cert_name,
                     'cert_root'          => $cert_root,
@@ -746,6 +751,7 @@ $txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 3
 $cert_name = $cert_name_locked ? PORKPRESS_CERT_NAME : get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = $cert_root_locked ? PORKPRESS_CERT_ROOT : get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
 $state_root = $state_root_locked ? PORKPRESS_STATE_ROOT : get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
+$network_wildcard = (bool) get_site_option( 'porkpress_ssl_network_wildcard', 0 );
         $auto_reconcile = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
         $dry_run        = (bool) get_site_option( 'porkpress_ssl_dry_run', 0 );
         $apache_reload  = (bool) get_site_option( 'porkpress_ssl_apache_reload', 1 );
@@ -773,6 +779,11 @@ echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_state_root">' . esc_html__( 'State Root', 'porkpress-ssl' ) . '</label></th>';
 echo '<td><input name="porkpress_state_root" type="text" id="porkpress_state_root" value="' . esc_attr( $state_root ) . '" class="regular-text"' . ( $state_root_locked ? ' readonly' : '' ) . ' /></td>';
+echo '</tr>';
+echo '<tr>';
+$base_domain = defined( 'DOMAIN_CURRENT_SITE' ) ? DOMAIN_CURRENT_SITE : '';
+echo '<th scope="row">' . esc_html__( 'Network Wildcard', 'porkpress-ssl' ) . '</th>';
+echo '<td><label><input name="porkpress_network_wildcard" type="checkbox" value="1"' . checked( $network_wildcard, true, false ) . ' /> ' . esc_html__( 'Include base domain and wildcard', 'porkpress-ssl' ) . ( $base_domain ? ' (' . esc_html( $base_domain ) . ', *.' . esc_html( $base_domain ) . ')' : '' ) . '</label></td>';
 echo '</tr>';
 echo '<tr>';
 echo '<th scope="row">' . esc_html__( 'Use Let\'s Encrypt Staging', 'porkpress-ssl' ) . '</th>';

@@ -44,6 +44,12 @@ class Certbot_Helper {
             $cmd .= ' --test-cert';
         }
         foreach ( $domains as $domain ) {
+            $domain = strtolower( $domain );
+            if ( 0 === strpos( $domain, '*.') ) {
+                $domain = '*.' . preg_replace( '/[^a-z0-9.-]/', '', substr( $domain, 2 ) );
+            } else {
+                $domain = preg_replace( '/[^a-z0-9.-]/', '', $domain );
+            }
             $cmd .= ' -d ' . escapeshellarg( $domain );
         }
         return $cmd;

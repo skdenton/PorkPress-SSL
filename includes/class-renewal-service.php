@@ -141,6 +141,20 @@ return array(
  * @return string
  */
 public static function build_certbot_command( array $domains, string $cert_name, bool $staging, bool $renewal = false ): string {
+if ( function_exists( '\\get_site_option' ) && \get_site_option( 'porkpress_ssl_network_wildcard', 0 ) && defined( 'DOMAIN_CURRENT_SITE' ) ) {
+    $base     = DOMAIN_CURRENT_SITE;
+    $suffix   = '.' . $base;
+    $wildcard = '*.' . $base;
+    $domains  = array_filter(
+        $domains,
+        static function ( $d ) use ( $suffix ) {
+            return substr( $d, -strlen( $suffix ) ) !== $suffix;
+        }
+    );
+    $domains[] = $base;
+    $domains[] = $wildcard;
+    $domains   = array_values( array_unique( $domains ) );
+}
 return Certbot_Helper::build_command( $domains, $cert_name, $staging, $renewal );
 }
 
