@@ -18,7 +18,6 @@ Renew the certificate for all domains recorded in the manifest:
 ```
 wp porkpress ssl:renew-all [--staging] [--cert-name="porkpress-network"]
 ```
-<<<<<<< codex/implement-porkbun-txt-record-management-script
 ## Stand‑alone certbot hook
 
 `bin/porkbun-hook.php` can be used as the manual authentication and cleanup
@@ -38,7 +37,7 @@ certbot certonly \
 Certbot sets `CERTBOT_DOMAIN` and `CERTBOT_VALIDATION` which the hook consumes.
 If WordPress is not located automatically, set the environment variable
 `WP_LOAD_PATH` to the directory containing `wp-load.php`.
-=======
+
 ## Porkbun API credentials
 
 The plugin requires a Porkbun API key and secret to manage domains. They can be
@@ -51,6 +50,20 @@ define('PORKPRESS_API_SECRET', 'sk_...');
 
 or via the network settings stored in the options `porkpress_ssl_api_key` and
 `porkpress_ssl_api_secret`.
+
+## Enabling `sunrise.php`
+
+To enable sunrise functionality, add the following to `wp-config.php`:
+
+```
+define('SUNRISE', true);
+```
+
+Then copy the plugin's `sunrise.php` file into your WordPress installation:
+
+```
+cp /path/to/porkpress-ssl/sunrise.php /path/to/wordpress/wp-content/sunrise.php
+```
 
 ## Certificate and state locations
 
@@ -70,3 +83,10 @@ PorkPress SSL listens for WordPress multisite events and updates its domain
 alias table automatically. When a site is created, deleted, archived or
 restored the plugin adjusts aliases and queues certificate issuance so SSL
 coverage remains in sync with the network.
+
+## Debian 11/Apache example
+
+On Debian 11 with Apache, WordPress is typically installed under `/var/www/html`
+and Let's Encrypt stores certificates in `/etc/letsencrypt`. An existing SAN
+certificate for `adynton.com` may already reside in this directory; PorkPress
+SSL can renew and expand it as additional domains are added.
