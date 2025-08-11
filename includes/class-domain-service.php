@@ -307,34 +307,45 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
        /**
         * Attach a domain to a site.
         *
- * @param string   $domain Domain name.
- * @param int      $site_id Site ID.
- * @param int|null $ttl     Optional TTL override.
- *
- * @return bool|Porkbun_Client_Error
- */
-public function attach_to_site( string $domain, int $site_id, ?int $ttl = null ) {
-if ( function_exists( 'update_site_meta' ) ) {
-update_site_meta( $site_id, 'porkpress_domain', $domain );
-}
+        * @param string   $domain Domain name.
+        * @param int      $site_id Site ID.
+        * @param int|null $ttl     Optional TTL override.
+        *
+        * @return bool|Porkbun_Client_Error|\WP_Error
+        */
+       public function attach_to_site( string $domain, int $site_id, ?int $ttl = null ) {
+               $skip_check = function_exists( 'apply_filters' )
+                       ? apply_filters( 'porkpress_ssl_skip_dns_check', false, $domain, $site_id )
+                       : false;
 
-$result = $this->add_alias( $site_id, $domain, true, 'active' );
-if ( $result instanceof Porkbun_Client_Error ) {
-return $result;
-}
+               if ( ! $skip_check ) {
+                       $check = $this->check_dns_health( $domain );
+                       if ( $check instanceof \WP_Error ) {
+                               return $check;
+                       }
+               }
 
-$ttl = $ttl ?? 300;
-if ( function_exists( 'apply_filters' ) ) {
-$ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
-}
+               if ( function_exists( 'update_site_meta' ) ) {
+                       update_site_meta( $site_id, 'porkpress_domain', $domain );
+               }
 
-$result = $this->create_a_record( $domain, $site_id, $ttl );
-if ( $result instanceof Porkbun_Client_Error ) {
-return $result;
-}
+               $result = $this->add_alias( $site_id, $domain, true, 'active' );
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       return $result;
+               }
 
-return true;
-}
+               $ttl = $ttl ?? 300;
+               if ( function_exists( 'apply_filters' ) ) {
+                       $ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
+               }
+
+               $result = $this->create_a_record( $domain, $site_id, $ttl );
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       return $result;
+               }
+
+               return true;
+       }
 
        /**
         * Create a new site and attach a domain as its primary alias.

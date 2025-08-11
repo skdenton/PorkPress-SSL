@@ -172,6 +172,33 @@ class Admin {
                         echo '<div class="card" style="flex:1 1 200px;"><h2>' . esc_html( $label ) . '</h2><p>' . esc_html( $value ) . '</p></div>';
                 }
                 echo '</div>';
+
+               $aliases = $service->get_aliases();
+               $issues  = array();
+               foreach ( $aliases as $alias ) {
+                       $domain  = $alias['domain'];
+                       $site_id = isset( $alias['site_id'] ) ? (int) $alias['site_id'] : 0;
+
+                       $skip = function_exists( 'apply_filters' )
+                               ? apply_filters( 'porkpress_ssl_skip_dns_check', false, $domain, $site_id )
+                               : false;
+                       if ( $skip ) {
+                               continue;
+                       }
+
+                       $check = $service->check_dns_health( $domain );
+                       if ( $check instanceof \WP_Error ) {
+                               $issues[] = $check->get_error_message();
+                       }
+               }
+
+               if ( $issues ) {
+                       echo '<div class="notice notice-warning"><p>' . esc_html__( 'DNS mismatches detected. Update the following domains to point to this network:', 'porkpress-ssl' ) . '</p><ul>';
+                       foreach ( $issues as $msg ) {
+                               echo '<li>' . esc_html( $msg ) . '</li>';
+                       }
+                       echo '</ul></div>';
+               }
         }
 
        /**
@@ -510,13 +537,6 @@ class Admin {
 
                switch ( $action ) {
                        case 'attach':
-                               if ( 'CONFIRM' !== strtoupper( $override ) ) {
-                                       $check = $service->check_dns_health( $domain );
-                                       if ( is_wp_error( $check ) ) {
-                                               wp_send_json_error( $check->get_error_message() );
-                                       }
-                               }
-
                                if ( $site_id > 0 ) {
                                        $result = $service->attach_to_site( $domain, $site_id );
                                } else {
