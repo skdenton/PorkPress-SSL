@@ -26,7 +26,7 @@ class RenewalServiceTest extends TestCase {
         function wp_schedule_single_event($timestamp, $hook){ $GLOBALS['porkpress_events'][$hook] = $timestamp; $GLOBALS['porkpress_scheduled'][] = $hook; }
         function wp_unschedule_event($timestamp, $hook){ unset($GLOBALS['porkpress_events'][$hook]); }
         function wp_json_encode($d){ return json_encode($d); }
-        function wp_mkdir_p($dir){ if(!is_dir($dir)) mkdir($dir,0777,true); }
+        function wp_mkdir_p($dir){ if(!is_dir($dir)) return mkdir($dir,0777,true); return true; }
         function current_time($t){ return gmdate('Y-m-d H:i:s'); }
         function get_current_user_id(){ return 0; }
         function network_admin_url($p=''){ return 'https://example.com/'.$p; }
@@ -54,6 +54,19 @@ class RenewalServiceTest extends TestCase {
             'domains'   => ['example.com'],
             'expires_at'=> gmdate('c', time() + 10*DAY_IN_SECONDS)
         ]));
+
+        $cert_root = sys_get_temp_dir() . '/porkpress-cert';
+        define('PORKPRESS_CERT_ROOT', $cert_root);
+        if (!is_dir($cert_root . '/live/test')) { mkdir($cert_root . '/live/test',0777,true); }
+        file_put_contents($cert_root . '/live/test/fullchain.pem', 'full');
+        file_put_contents($cert_root . '/live/test/privkey.pem', 'key');
+        file_put_contents($cert_root . '/live/test/cert.pem', 'cert');
+
+        @mkdir('/etc/apache2/sites-available', 0777, true);
+        @unlink('/etc/apache2/sites-available/test/fullchain.pem');
+        @unlink('/etc/apache2/sites-available/test/privkey.pem');
+        @rmdir('/etc/apache2/sites-available/test');
+        file_put_contents('/etc/apache2/sites-available/test.conf', '');
     }
 
     public function testSchedulesBasedOnExpiry() {
@@ -77,5 +90,25 @@ class RenewalServiceTest extends TestCase {
     public function testStagingAddsFlag() {
         $cmd = \PorkPress\SSL\Renewal_Service::build_certbot_command(['example.com'], 'test', true, true);
         $this->assertStringContainsString('--test-cert', $cmd);
+    }
+
+    public function testReloadsApacheAndCopiesFiles() {
+        update_site_option('porkpress_ssl_apache_reload', 1);
+        update_site_option('porkpress_ssl_apache_reload_cmd', 'reloadcmd');
+        $commands = [];
+        \PorkPress\SSL\Renewal_Service::$runner = function($cmd) use (&$commands){ $commands[] = $cmd; return ['code'=>0,'output'=>'']; };
+        \PorkPress\SSL\Renewal_Service::run();
+        $this->assertContains('reloadcmd', $commands);
+        $this->assertFileExists('/etc/apache2/sites-available/test/fullchain.pem');
+        $this->assertFileExists('/etc/apache2/sites-available/test/privkey.pem');
+    }
+
+    public function testNoReloadWhenDisabled() {
+        update_site_option('porkpress_ssl_apache_reload', 0);
+        $commands = [];
+        \PorkPress\SSL\Renewal_Service::$runner = function($cmd) use (&$commands){ $commands[] = $cmd; return ['code'=>0,'output'=>'']; };
+        \PorkPress\SSL\Renewal_Service::run();
+        $this->assertCount(1, $commands);
+        $this->assertFileDoesNotExist('/etc/apache2/sites-available/test/fullchain.pem');
     }
 }

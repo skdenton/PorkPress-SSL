@@ -104,6 +104,7 @@ $result = self::execute( $cmd );
         }
 
         self::write_manifest( $manifest['domains'], $cert_name );
+        self::deploy_to_apache( $cert_name );
         Logger::info( 'renew_certificate', array( 'attempt' => $attempt ), 'success' );
         update_site_option( self::OPTION_ATTEMPTS, 0 );
         update_site_option( self::OPTION_EXPIRY_NOTIFIED, $manifest['expires_at'] ?? '' );
@@ -185,6 +186,70 @@ wp_mkdir_p( $state_root );
 }
 file_put_contents( rtrim( $state_root, '/\\' ) . '/manifest.json', wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
 }
+
+    /**
+     * Copy or symlink certificate files into Apache vhost directories and reload Apache.
+     *
+     * @param string $cert_name Certificate lineage name.
+     */
+    protected static function deploy_to_apache( string $cert_name ): void {
+        $enabled = (bool) get_site_option( 'porkpress_ssl_apache_reload', 1 );
+        if ( ! $enabled ) {
+            return;
+        }
+
+        $cert_root = get_site_option(
+            'porkpress_ssl_cert_root',
+            defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
+        );
+        $live_dir  = rtrim( $cert_root, '/\\' ) . '/live/' . $cert_name;
+        $source    = array(
+            'fullchain' => $live_dir . '/fullchain.pem',
+            'privkey'   => $live_dir . '/privkey.pem',
+        );
+
+        $confs = glob( '/etc/apache2/sites-available/*.conf' ) ?: array();
+        foreach ( $confs as $conf ) {
+            $dest_dir = preg_replace( '/\.conf$/', '', $conf );
+            if ( ! is_dir( $dest_dir ) && ! wp_mkdir_p( $dest_dir ) ) {
+                Logger::error( 'apache_deploy', array( 'dir' => $dest_dir ), 'mkdir failed' );
+                continue;
+            }
+            foreach ( $source as $name => $src ) {
+                $dest = $dest_dir . '/' . $name . '.pem';
+                if ( file_exists( $dest ) ) {
+                    @unlink( $dest );
+                }
+                if ( ! @symlink( $src, $dest ) ) {
+                    if ( ! @copy( $src, $dest ) ) {
+                        $err = error_get_last();
+                        Logger::error(
+                            'apache_deploy',
+                            array( 'src' => $src, 'dest' => $dest, 'error' => $err['message'] ?? '' ),
+                            'copy failed'
+                        );
+                    }
+                }
+            }
+        }
+
+        $cmd    = get_site_option( 'porkpress_ssl_apache_reload_cmd', 'apachectl -k reload' );
+        $result = self::execute( $cmd );
+        if ( 0 !== $result['code'] ) {
+            $context = array(
+                'cmd'    => $cmd,
+                'code'   => $result['code'],
+                'output' => $result['output'],
+            );
+            if ( preg_match( '/permission/i', $result['output'] ) ) {
+                Logger::error( 'apache_reload', $context, 'permission denied' );
+            } else {
+                Logger::error( 'apache_reload', $context, 'failed' );
+            }
+        } else {
+            Logger::info( 'apache_reload', array( 'cmd' => $cmd ), 'success' );
+        }
+    }
 
 /**
  * Retrieve manifest data.

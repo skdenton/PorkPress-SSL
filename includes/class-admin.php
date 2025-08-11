@@ -701,6 +701,13 @@ $state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_S
             $dry_run = isset( $_POST['porkpress_dry_run'] ) ? 1 : 0;
             update_site_option( 'porkpress_ssl_dry_run', $dry_run );
 
+            $apache_reload = isset( $_POST['porkpress_apache_reload'] ) ? 1 : 0;
+            update_site_option( 'porkpress_ssl_apache_reload', $apache_reload );
+
+            if ( isset( $_POST['porkpress_apache_reload_cmd'] ) ) {
+                update_site_option( 'porkpress_ssl_apache_reload_cmd', sanitize_text_field( wp_unslash( $_POST['porkpress_apache_reload_cmd'] ) ) );
+            }
+
 // Log the settings update without exposing sensitive values.
             Logger::info(
                 'update_settings',
@@ -713,6 +720,7 @@ $state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_S
                     'txt_interval'       => $txt_interval,
                     'auto_reconcile'     => (bool) $auto_reconcile,
                     'dry_run'            => (bool) $dry_run,
+                    'apache_reload'      => (bool) $apache_reload,
                     'cert_name'          => $cert_name,
                     'cert_root'          => $cert_root,
                     'state_root'         => $state_root,
@@ -740,6 +748,8 @@ $cert_root = $cert_root_locked ? PORKPRESS_CERT_ROOT : get_site_option( 'porkpre
 $state_root = $state_root_locked ? PORKPRESS_STATE_ROOT : get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
         $auto_reconcile = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
         $dry_run        = (bool) get_site_option( 'porkpress_ssl_dry_run', 0 );
+        $apache_reload  = (bool) get_site_option( 'porkpress_ssl_apache_reload', 1 );
+        $apache_cmd     = get_site_option( 'porkpress_ssl_apache_reload_cmd', 'apachectl -k reload' );
 
 echo '<form method="post">';
 wp_nonce_field( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
@@ -788,9 +798,17 @@ echo '<tr>';
         echo '<th scope="row">' . esc_html__( 'Dry Run Mode', 'porkpress-ssl' ) . '</th>';
         echo '<td><label><input name="porkpress_dry_run" type="checkbox" value="1"' . checked( $dry_run, true, false ) . ' /> ' . esc_html__( 'Enable dry-run mode', 'porkpress-ssl' ) . '</label></td>';
         echo '</tr>';
-echo '</table>';
-submit_button();
-echo '</form>';
+        echo '<tr>';
+        echo '<th scope="row">' . esc_html__( 'Reload Apache', 'porkpress-ssl' ) . '</th>';
+        echo '<td><label><input name="porkpress_apache_reload" type="checkbox" value="1"' . checked( $apache_reload, true, false ) . ' /> ' . esc_html__( 'Copy certs and reload Apache after renewal', 'porkpress-ssl' ) . '</label></td>';
+        echo '</tr>';
+        echo '<tr>';
+        echo '<th scope="row"><label for="porkpress_apache_reload_cmd">' . esc_html__( 'Apache Reload Command', 'porkpress-ssl' ) . '</label></th>';
+        echo '<td><input name="porkpress_apache_reload_cmd" type="text" id="porkpress_apache_reload_cmd" value="' . esc_attr( $apache_cmd ) . '" class="regular-text" /></td>';
+        echo '</tr>';
+        echo '</table>';
+        submit_button();
+        echo '</form>';
 }
 
 /**
