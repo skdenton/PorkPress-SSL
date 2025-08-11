@@ -24,6 +24,11 @@ if ( ! function_exists( 'current_time' ) ) {
         return date( 'Y-m-d H:i:s' );
     }
 }
+if ( ! function_exists( '__' ) ) {
+    function __( $text, $domain = null ) {
+        return $text;
+    }
+}
 if ( ! defined( 'ARRAY_A' ) ) {
     define( 'ARRAY_A', 'ARRAY_A' );
 }
@@ -211,6 +216,26 @@ class DomainServiceTest extends TestCase {
 
         $this->assertSame( [ 'one.com', 'two.com' ], $domains );
         $this->assertSame( 3, $mock->calls );
+    }
+
+    public function testListDomainsErrorsOnDuplicateResponses() {
+        $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public int $calls = 0;
+            public function __construct() {}
+            public function listDomains( int $page = 1, int $per_page = 100 ) {
+                $this->calls++;
+                return [ 'status' => 'SUCCESS', 'domains' => [ [ 'domain' => 'dup.com' ] ] ];
+            }
+        };
+
+        $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+        };
+
+        $result = $service->list_domains();
+        $this->assertInstanceOf( \PorkPress\SSL\Porkbun_Client_Error::class, $result );
+        $this->assertSame( 'duplicate_page', $result->code );
+        $this->assertSame( 2, $mock->calls );
     }
 
     public function testIsDomainActiveUsesSingleEndpoint() {

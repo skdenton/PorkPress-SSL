@@ -39,6 +39,7 @@ protected ?array $domain_list_cache = null;
 
 private const DOMAIN_LIST_CACHE_KEY = 'porkpress_ssl_domain_list';
 private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
+private const DOMAIN_LIST_MAX_PAGES = 100;
 
        /**
         * Constructor.
@@ -236,8 +237,21 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
         $status       = 'SUCCESS';
         $all_domains  = array();
         $current_page = $page;
+        $page_count   = 0;
+        $page_hashes  = array();
 
         do {
+            $page_count++;
+            if ( $page_count > self::DOMAIN_LIST_MAX_PAGES ) {
+                return new Porkbun_Client_Error(
+                    'page_limit_exceeded',
+                    sprintf(
+                        __( 'Exceeded maximum page count of %d while listing domains.', 'porkpress-ssl' ),
+                        self::DOMAIN_LIST_MAX_PAGES
+                    )
+                );
+            }
+
             $result = $this->client->listDomains( $current_page, $per_page );
 
             if ( $result instanceof Porkbun_Client_Error ) {
@@ -262,6 +276,15 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
                 },
                 $domains
             );
+
+            $current_hash = md5( json_encode( $domains ) );
+            if ( in_array( $current_hash, $page_hashes, true ) ) {
+                return new Porkbun_Client_Error(
+                    'duplicate_page',
+                    __( 'Duplicate page response detected while listing domains.', 'porkpress-ssl' )
+                );
+            }
+            $page_hashes[] = $current_hash;
 
             $all_domains = array_merge( $all_domains, $domains );
             $current_page++;
