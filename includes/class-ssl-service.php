@@ -116,7 +116,10 @@ class SSL_Service {
                        return;
                }
 
-               $cert_name = 'porkpress-network';
+               $cert_name = \get_site_option(
+                       'porkpress_ssl_cert_name',
+                       defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
+               );
                $staging   = function_exists( '\\get_site_option' ) ? (bool) \get_site_option( 'porkpress_ssl_le_staging', 0 ) : false;
 
                $cmd = Renewal_Service::build_certbot_command( $all_domains, $cert_name, $staging, false );

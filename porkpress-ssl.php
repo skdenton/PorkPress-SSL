@@ -29,6 +29,9 @@ if ( ! defined( 'PORKPRESS_CERT_ROOT' ) ) {
 if ( ! defined( 'PORKPRESS_STATE_ROOT' ) ) {
         define( 'PORKPRESS_STATE_ROOT', '/var/lib/porkpress-ssl' );
 }
+if ( ! defined( 'PORKPRESS_CERT_NAME' ) ) {
+        define( 'PORKPRESS_CERT_NAME', 'porkpress-network' );
+}
 
 require_once __DIR__ . '/includes/class-admin.php';
 require_once __DIR__ . '/includes/class-porkbun-client.php';

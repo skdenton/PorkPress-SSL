@@ -84,7 +84,10 @@ return;
 }
 
 $attempt   = absint( get_site_option( self::OPTION_ATTEMPTS, 0 ) ) + 1;
-$cert_name = $manifest['cert_name'] ?? 'porkpress-network';
+$cert_name = $manifest['cert_name'] ?? get_site_option(
+'porkpress_ssl_cert_name',
+defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
+);
 $staging   = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 
 $cmd    = self::build_certbot_command( $manifest['domains'], $cert_name, $staging, true );
@@ -147,8 +150,14 @@ return Certbot_Helper::build_command( $domains, $cert_name, $staging, $renewal )
  * @param string $cert_name Certificate name.
  */
 public static function write_manifest( array $domains, string $cert_name ): void {
-$cert_root  = defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt';
-$state_root = defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl';
+$cert_root  = get_site_option(
+'porkpress_ssl_cert_root',
+defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
+);
+$state_root = get_site_option(
+'porkpress_ssl_state_root',
+defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl'
+);
 $live_dir = rtrim( $cert_root, '/\\' ) . '/live/' . $cert_name;
 $paths    = array(
 'fullchain' => $live_dir . '/fullchain.pem',
@@ -181,9 +190,64 @@ file_put_contents( rtrim( $state_root, '/\\' ) . '/manifest.json', wp_json_encod
  * Retrieve manifest data.
  */
 protected static function get_manifest(): ?array {
-$state_root    = defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl';
+$state_root    = get_site_option(
+'porkpress_ssl_state_root',
+defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl'
+);
 $manifest_path = rtrim( $state_root, '/\\' ) . '/manifest.json';
 if ( ! file_exists( $manifest_path ) ) {
+$cert_name = get_site_option(
+'porkpress_ssl_cert_name',
+defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
+);
+$cert_root = get_site_option(
+'porkpress_ssl_cert_root',
+defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
+);
+$live_dir  = rtrim( $cert_root, '/\\' ) . '/live/' . $cert_name;
+$cert_file = $live_dir . '/cert.pem';
+if ( file_exists( $cert_file ) ) {
+$cert_data = openssl_x509_parse( file_get_contents( $cert_file ) );
+if ( $cert_data ) {
+$issued_at  = gmdate( 'c', $cert_data['validFrom_time_t'] );
+$expires_at = gmdate( 'c', $cert_data['validTo_time_t'] );
+$domains    = array();
+if ( ! empty( $cert_data['extensions']['subjectAltName'] ) ) {
+$sans = explode( ',', $cert_data['extensions']['subjectAltName'] );
+foreach ( $sans as $san ) {
+$san = trim( $san );
+if ( 0 === strpos( $san, 'DNS:' ) ) {
+$domains[] = substr( $san, 4 );
+}
+}
+} elseif ( ! empty( $cert_data['subject']['CN'] ) ) {
+$domains[] = $cert_data['subject']['CN'];
+}
+$paths = array(
+'fullchain' => $live_dir . '/fullchain.pem',
+'privkey'   => $live_dir . '/privkey.pem',
+'chain'     => $live_dir . '/chain.pem',
+'cert'      => $cert_file,
+);
+if ( ! is_dir( $state_root ) ) {
+if ( function_exists( 'wp_mkdir_p' ) ) {
+wp_mkdir_p( $state_root );
+} else {
+mkdir( $state_root, 0777, true );
+}
+}
+$manifest = array(
+'cert_name'  => $cert_name,
+'domains'    => array_values( array_unique( $domains ) ),
+'issued_at'  => $issued_at,
+'expires_at' => $expires_at,
+'paths'      => $paths,
+);
+$encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+file_put_contents( $manifest_path, $encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+return $manifest;
+}
+}
 return null;
 }
 $manifest = json_decode( file_get_contents( $manifest_path ), true );

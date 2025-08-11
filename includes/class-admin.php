@@ -577,6 +577,9 @@ class Admin {
 public function render_settings_tab() {
 $api_key_locked    = defined( 'PORKPRESS_API_KEY' );
 $api_secret_locked = defined( 'PORKPRESS_API_SECRET' );
+$cert_name_locked  = defined( 'PORKPRESS_CERT_NAME' );
+$cert_root_locked  = defined( 'PORKPRESS_CERT_ROOT' );
+$state_root_locked = defined( 'PORKPRESS_STATE_ROOT' );
 
         if ( isset( $_POST['porkpress_ssl_settings_nonce'] ) ) {
             check_admin_referer( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
@@ -603,6 +606,20 @@ $raw_txt_interval = isset( $_POST['porkpress_txt_interval'] ) ? absint( wp_unsla
 $txt_interval     = max( 1, $raw_txt_interval );
 update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
 
+if ( ! $cert_name_locked && isset( $_POST['porkpress_cert_name'] ) ) {
+update_site_option( 'porkpress_ssl_cert_name', sanitize_text_field( wp_unslash( $_POST['porkpress_cert_name'] ) ) );
+}
+if ( ! $cert_root_locked && isset( $_POST['porkpress_cert_root'] ) ) {
+update_site_option( 'porkpress_ssl_cert_root', sanitize_text_field( wp_unslash( $_POST['porkpress_cert_root'] ) ) );
+}
+if ( ! $state_root_locked && isset( $_POST['porkpress_state_root'] ) ) {
+update_site_option( 'porkpress_ssl_state_root', sanitize_text_field( wp_unslash( $_POST['porkpress_state_root'] ) ) );
+}
+
+$cert_name = get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
+$cert_root = get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
+$state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
+
             $auto_reconcile = isset( $_POST['porkpress_auto_reconcile'] ) ? 1 : 0;
             update_site_option( 'porkpress_ssl_auto_reconcile', $auto_reconcile );
 
@@ -621,6 +638,9 @@ update_site_option( 'porkpress_ssl_txt_interval', $txt_interval );
                     'txt_interval'       => $txt_interval,
                     'auto_reconcile'     => (bool) $auto_reconcile,
                     'dry_run'            => (bool) $dry_run,
+                    'cert_name'          => $cert_name,
+                    'cert_root'          => $cert_root,
+                    'state_root'         => $state_root,
                 ),
                 'Settings saved'
             );
@@ -640,6 +660,9 @@ $staging    = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 $renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
 $txt_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) ) );
 $txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) ) );
+$cert_name = $cert_name_locked ? PORKPRESS_CERT_NAME : get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
+$cert_root = $cert_root_locked ? PORKPRESS_CERT_ROOT : get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
+$state_root = $state_root_locked ? PORKPRESS_STATE_ROOT : get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
         $auto_reconcile = (bool) get_site_option( 'porkpress_ssl_auto_reconcile', 1 );
         $dry_run        = (bool) get_site_option( 'porkpress_ssl_dry_run', 0 );
 
@@ -653,6 +676,18 @@ echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_api_secret">' . esc_html__( 'Porkbun API Secret', 'porkpress-ssl' ) . '</label></th>';
 echo '<td><input name="porkpress_api_secret" type="text" id="porkpress_api_secret" value="' . esc_attr( $api_secret ) . '" class="regular-text"' . ( $api_secret_locked ? ' readonly' : '' ) . ' /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_cert_name">' . esc_html__( 'Certificate Name', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_cert_name" type="text" id="porkpress_cert_name" value="' . esc_attr( $cert_name ) . '" class="regular-text"' . ( $cert_name_locked ? ' readonly' : '' ) . ' /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_cert_root">' . esc_html__( 'Certificate Root', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_cert_root" type="text" id="porkpress_cert_root" value="' . esc_attr( $cert_root ) . '" class="regular-text"' . ( $cert_root_locked ? ' readonly' : '' ) . ' /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_state_root">' . esc_html__( 'State Root', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_state_root" type="text" id="porkpress_state_root" value="' . esc_attr( $state_root ) . '" class="regular-text"' . ( $state_root_locked ? ' readonly' : '' ) . ' /></td>';
 echo '</tr>';
 echo '<tr>';
 echo '<th scope="row">' . esc_html__( 'Use Let\'s Encrypt Staging', 'porkpress-ssl' ) . '</th>';

@@ -75,6 +75,7 @@ the active certificate. By default these roots are `/etc/letsencrypt` and
 ```
 define('PORKPRESS_CERT_ROOT', '/etc/letsencrypt');
 define('PORKPRESS_STATE_ROOT', '/var/lib/porkpress-ssl');
+define('PORKPRESS_CERT_NAME', 'porkpress-network');
 ```
 
 ## Multisite lifecycle
