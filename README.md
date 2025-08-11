@@ -4,8 +4,8 @@ A wordpress multisite plugin for porkbun that can optionally update certbot for 
 ## WP-CLI
 
 The plugin exposes commands for managing certificates using Certbot's DNS-01
-challenge. TXT records are created and removed through bundled hook scripts
-for Porkbun.
+challenge. TXT records are created and removed through a bundled PHP hook
+script that talks to Porkbun via their API.
 
 Issue a certificate for one or more domains:
 
@@ -18,7 +18,27 @@ Renew the certificate for all domains recorded in the manifest:
 ```
 wp porkpress ssl:renew-all [--staging] [--cert-name="porkpress-network"]
 ```
+<<<<<<< codex/implement-porkbun-txt-record-management-script
+## Stand‑alone certbot hook
 
+`bin/porkbun-hook.php` can be used as the manual authentication and cleanup
+hooks for Certbot. The script loads WordPress to obtain Porkbun credentials and
+log activity via the plugin's `Logger`.
+
+Example certbot invocation:
+
+```
+certbot certonly \
+  --manual --preferred-challenges dns \
+  --manual-auth-hook '/path/to/bin/porkbun-hook.php add' \
+  --manual-cleanup-hook '/path/to/bin/porkbun-hook.php del' \
+  -d example.com
+```
+
+Certbot sets `CERTBOT_DOMAIN` and `CERTBOT_VALIDATION` which the hook consumes.
+If WordPress is not located automatically, set the environment variable
+`WP_LOAD_PATH` to the directory containing `wp-load.php`.
+=======
 ## Porkbun API credentials
 
 The plugin requires a Porkbun API key and secret to manage domains. They can be
