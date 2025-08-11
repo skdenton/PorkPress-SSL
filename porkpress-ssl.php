@@ -60,6 +60,46 @@ function porkpress_ssl_activate() {
                wp_schedule_event( time(), 'daily', 'porkpress_ssl_reconcile' );
        }
        \PorkPress\SSL\Renewal_Service::maybe_schedule();
+        $errors   = array();
+        $warnings = array();
+
+        // Verify certbot command.
+        $certbot = trim( shell_exec( 'command -v certbot 2>/dev/null' ) );
+        if ( '' === $certbot ) {
+                $errors[] = __( 'Certbot is required but could not be found.', 'porkpress-ssl' );
+                \PorkPress\SSL\Logger::error( 'activation_check', array( 'check' => 'certbot' ), 'missing' );
+        }
+
+        // Ensure required directories are writable.
+        foreach ( array( PORKPRESS_CERT_ROOT, PORKPRESS_STATE_ROOT ) as $dir ) {
+                if ( ! is_writable( $dir ) ) {
+                        $errors[] = sprintf( __( '%s is not writable.', 'porkpress-ssl' ), $dir );
+                        \PorkPress\SSL\Logger::error( 'activation_check', array( 'path' => $dir ), 'not_writable' );
+                }
+        }
+
+        // Optionally check for apache2ctl.
+        $apache = trim( shell_exec( 'command -v apache2ctl 2>/dev/null' ) );
+        if ( '' === $apache ) {
+                $warnings[] = __( 'apache2ctl not found; automatic Apache reloads may fail.', 'porkpress-ssl' );
+                \PorkPress\SSL\Logger::warn( 'activation_check', array( 'check' => 'apache2ctl' ), 'missing' );
+        }
+
+        if ( $errors ) {
+                \PorkPress\SSL\Notifier::notify(
+                        'error',
+                        __( 'PorkPress SSL activation checks failed', 'porkpress-ssl' ),
+                        implode( ' ', $errors )
+                );
+        }
+
+        if ( $warnings ) {
+                \PorkPress\SSL\Notifier::notify(
+                        'warning',
+                        __( 'PorkPress SSL activation warnings', 'porkpress-ssl' ),
+                        implode( ' ', $warnings )
+                );
+        }
         // Grant request capability to site administrators on all sites.
         if ( is_multisite() ) {
                 foreach ( get_sites() as $site ) {
