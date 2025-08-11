@@ -92,6 +92,17 @@ class RenewalServiceTest extends TestCase {
         $this->assertStringContainsString('--test-cert', $cmd);
     }
 
+    public function testBuildCertbotCommandAddsNetworkWildcard() {
+        update_site_option('porkpress_ssl_network_wildcard', 1);
+        if ( ! defined('DOMAIN_CURRENT_SITE') ) {
+            define('DOMAIN_CURRENT_SITE', 'example.com');
+        }
+        $cmd = \PorkPress\SSL\Renewal_Service::build_certbot_command(['sub.example.com'], 'cert', false, false);
+        $this->assertStringContainsString("-d 'example.com'", $cmd);
+        $this->assertStringContainsString("-d '*.example.com'", $cmd);
+        $this->assertStringNotContainsString("-d 'sub.example.com'", $cmd);
+    }
+
     public function testReloadsApacheAndCopiesFiles() {
         update_site_option('porkpress_ssl_apache_reload', 1);
         update_site_option('porkpress_ssl_apache_reload_cmd', 'reloadcmd');
