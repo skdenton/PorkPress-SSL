@@ -426,6 +426,54 @@ class DomainServiceTest extends TestCase {
         $this->assertSame( array( 1, 2 ), $client->deleted );
     }
 
+    public function testCreateARecordCallsClient() {
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $created = array();
+            public function __construct() {}
+            public function createARecord( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+                $this->created[] = func_get_args();
+                return array( 'status' => 'SUCCESS' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            public function call( string $domain, int $site_id, int $ttl ) { return $this->create_a_record( $domain, $site_id, $ttl ); }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+            protected function get_network_ipv6(): string { return ''; }
+        };
+
+        $this->assertTrue( $service->call( 'example.com', 1, 600 ) );
+        $this->assertSame( array( array( 'example.com', '', '1.1.1.1', 600, 'A' ) ), $client->created );
+    }
+
+    public function testDeleteARecordRemovesMatchingRecord() {
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $deleted = array();
+            public function __construct() {}
+            public function getRecords( string $domain ) {
+                return array( 'records' => array(
+                    array( 'id' => 1, 'type' => 'A', 'content' => '1.1.1.1', 'name' => '' ),
+                    array( 'id' => 2, 'type' => 'A', 'content' => '2.2.2.2', 'name' => '' ),
+                ) );
+            }
+            public function deleteRecord( string $domain, int $record_id ) {
+                $this->deleted[] = $record_id;
+                return array( 'status' => 'SUCCESS' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            public function call( string $domain, int $site_id ) { return $this->delete_a_record( $domain, $site_id ); }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+            protected function get_network_ipv6(): string { return ''; }
+        };
+
+        $this->assertTrue( $service->call( 'example.com', 1 ) );
+        $this->assertSame( array( 1 ), $client->deleted );
+    }
+
     public function testCheckDnsHealthFailsWhenNoARecord() {
         global $dns_records;
         $dns_records = array(
