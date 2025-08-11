@@ -19,6 +19,19 @@ Renew the certificate for all domains recorded in the manifest:
 wp porkpress ssl:renew-all [--staging] [--cert-name="porkpress-network"]
 ```
 
+## Porkbun API credentials
+
+The plugin requires a Porkbun API key and secret to manage domains. They can be
+supplied either through constants in `wp-config.php`:
+
+```
+define('PORKPRESS_API_KEY', 'pk_...');
+define('PORKPRESS_API_SECRET', 'sk_...');
+```
+
+or via the network settings stored in the options `porkpress_ssl_api_key` and
+`porkpress_ssl_api_secret`.
+
 ## Certificate and state locations
 
 Certificates are stored under `${PORKPRESS_CERT_ROOT}/live/<cert-name>/` and a

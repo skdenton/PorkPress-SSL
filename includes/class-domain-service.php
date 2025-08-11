@@ -56,6 +56,12 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                $this->missing_credentials = empty( $api_key ) || empty( $api_secret );
                if ( $this->dry_run ) {
                        $this->missing_credentials = false;
+               } elseif ( $this->missing_credentials ) {
+                       Notifier::notify(
+                               'error',
+                               __( 'Porkbun API credentials missing', 'porkpress-ssl' ),
+                               __( 'Add your Porkbun API key and secret in the Settings tab or via constants.', 'porkpress-ssl' )
+                       );
                }
 
                if ( $client ) {

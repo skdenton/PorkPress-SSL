@@ -33,6 +33,50 @@ if ( ! defined( 'ARRAY_A' ) ) {
     define( 'ARRAY_A', 'ARRAY_A' );
 }
 
+if ( ! function_exists( 'get_site_option' ) ) {
+    $GLOBALS['porkpress_site_options'] = array();
+    $GLOBALS['porkpress_emails']       = array();
+    function get_site_option( $key, $default = '' ) {
+        return $GLOBALS['porkpress_site_options'][ $key ] ?? $default;
+    }
+}
+if ( ! function_exists( 'update_site_option' ) ) {
+    function update_site_option( $key, $value ) {
+        $GLOBALS['porkpress_site_options'][ $key ] = $value;
+    }
+}
+if ( ! function_exists( 'network_admin_url' ) ) {
+    function network_admin_url( $path = '' ) {
+        return 'https://example.com/' . $path;
+    }
+}
+if ( ! function_exists( 'wp_mail' ) ) {
+    function wp_mail( $to, $subject, $message ) {
+        $GLOBALS['porkpress_emails'][] = compact( 'to', 'subject', 'message' );
+        return true;
+    }
+}
+if ( ! function_exists( 'esc_url' ) ) {
+    function esc_url( $url ) {
+        return $url;
+    }
+}
+if ( ! function_exists( 'esc_html__' ) ) {
+    function esc_html__( $text, $domain = null ) {
+        return $text;
+    }
+}
+if ( ! function_exists( 'esc_attr' ) ) {
+    function esc_attr( $text ) {
+        return $text;
+    }
+}
+if ( ! function_exists( 'wp_kses_post' ) ) {
+    function wp_kses_post( $text ) {
+        return $text;
+    }
+}
+
 if ( ! function_exists( 'apply_filters' ) ) {
     function apply_filters( $tag, $value ) {
         if ( 'porkpress_ssl_skip_dns_check' === $tag ) {
@@ -64,6 +108,7 @@ require_once __DIR__ . '/../includes/class-logger.php';
 require_once __DIR__ . '/../includes/class-domain-service.php';
 require_once __DIR__ . '/../includes/class-porkbun-client.php';
 require_once __DIR__ . '/../includes/class-ssl-service.php';
+require_once __DIR__ . '/../includes/class-notifier.php';
 
 class DomainServiceTest extends TestCase {
     public function testListDomainsMapsTypeAndExpiry() {
@@ -334,6 +379,17 @@ class DomainServiceTest extends TestCase {
         $map     = array_column( $aliases, 'is_primary', 'domain' );
         $this->assertSame( 1, $map['two.com'] );
         $this->assertSame( 0, $map['one.com'] );
+    }
+
+    public function testConstructorNotifiesOnMissingCredentials() {
+        $GLOBALS['porkpress_site_options'] = array();
+        $GLOBALS['porkpress_emails']       = array();
+
+        new \PorkPress\SSL\Domain_Service();
+
+        $notices = get_site_option( \PorkPress\SSL\Notifier::OPTION, array() );
+        $this->assertNotEmpty( $notices );
+        $this->assertSame( 'error', $notices[0]['type'] );
     }
 
     protected function tearDown(): void {
