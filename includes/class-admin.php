@@ -146,28 +146,33 @@ class Admin {
                         }
                 }
 
-                $mapped = count( $service->get_aliases() );
+               $mapped       = count( $service->get_aliases() );
 
-                $reconciler  = new Reconciler( $service );
-                $drift       = $reconciler->reconcile_all( false );
-                $drift_count = count( $drift['missing_aliases'] ) + count( $drift['stray_aliases'] ) + count( $drift['disabled_sites'] );
+               $reconciler   = new Reconciler( $service );
+               $drift        = $reconciler->reconcile_all( false );
+               $drift_count  = count( $drift['missing_aliases'] ) + count( $drift['stray_aliases'] ) + count( $drift['disabled_sites'] );
 
-                global $wpdb;
-                $table          = Logger::get_table_name();
-                $ssl_log        = $wpdb->get_row( $wpdb->prepare( "SELECT time, result FROM {$table} WHERE action = %s ORDER BY time DESC LIMIT 1", 'issue_certificate' ), ARRAY_A );
-                $ssl_status     = $ssl_log ? $ssl_log['time'] . ' (' . $ssl_log['result'] . ')' : __( 'Never', 'porkpress-ssl' );
-                $reconcile_log  = $wpdb->get_row( $wpdb->prepare( "SELECT time, result FROM {$table} WHERE action = %s ORDER BY time DESC LIMIT 1", 'reconcile' ), ARRAY_A );
-                $reconcile_stat = $reconcile_log ? $reconcile_log['time'] . ' (' . $reconcile_log['result'] . ')' : __( 'Never', 'porkpress-ssl' );
+               global $wpdb;
+               $table         = Logger::get_table_name();
+               $ssl_log       = $wpdb->get_row( $wpdb->prepare( "SELECT time, result FROM {$table} WHERE action = %s ORDER BY time DESC LIMIT 1", 'issue_certificate' ), ARRAY_A );
+               $ssl_status    = $ssl_log ? $ssl_log['time'] . ' (' . $ssl_log['result'] . ')' : __( 'Never', 'porkpress-ssl' );
+               $reconcile_log = $wpdb->get_row( $wpdb->prepare( "SELECT time, result FROM {$table} WHERE action = %s ORDER BY time DESC LIMIT 1", 'reconcile' ), ARRAY_A );
+               $reconcile_stat = $reconcile_log ? $reconcile_log['time'] . ' (' . $reconcile_log['result'] . ')' : __( 'Never', 'porkpress-ssl' );
 
-                echo '<div style="display:flex; flex-wrap:wrap; gap:1em;">';
-                $cards = array(
-                        __( 'Total Porkbun Domains', 'porkpress-ssl' )          => number_format_i18n( $total_domains ),
-                        __( 'Mapped Domains', 'porkpress-ssl' )                => number_format_i18n( $mapped ),
-                        __( 'Drift Alerts', 'porkpress-ssl' )                 => number_format_i18n( $drift_count ),
-                        __( 'Upcoming Expiries (≤30 days)', 'porkpress-ssl' ) => number_format_i18n( $upcoming_expiry ),
-                        __( 'Last SSL Run Status', 'porkpress-ssl' )          => $ssl_status,
-                        __( 'Last Reconcile', 'porkpress-ssl' )              => $reconcile_stat,
-                );
+               $cred_status = $service->has_credentials()
+                       ? __( 'Configured', 'porkpress-ssl' )
+                       : __( 'Missing', 'porkpress-ssl' );
+
+               echo '<div style="display:flex; flex-wrap:wrap; gap:1em;">';
+               $cards = array(
+                       __( 'API Credentials', 'porkpress-ssl' )              => $cred_status,
+                       __( 'Total Porkbun Domains', 'porkpress-ssl' )        => number_format_i18n( $total_domains ),
+                       __( 'Mapped Domains', 'porkpress-ssl' )              => number_format_i18n( $mapped ),
+                       __( 'Drift Alerts', 'porkpress-ssl' )               => number_format_i18n( $drift_count ),
+                       __( 'Upcoming Expiries (≤30 days)', 'porkpress-ssl' ) => number_format_i18n( $upcoming_expiry ),
+                       __( 'Last SSL Run Status', 'porkpress-ssl' )        => $ssl_status,
+                       __( 'Last Reconcile', 'porkpress-ssl' )            => $reconcile_stat,
+               );
                 foreach ( $cards as $label => $value ) {
                         echo '<div class="card" style="flex:1 1 200px;"><h2>' . esc_html( $label ) . '</h2><p>' . esc_html( $value ) . '</p></div>';
                 }

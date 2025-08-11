@@ -18,7 +18,7 @@ Renew the certificate for all domains recorded in the manifest:
 ```
 wp porkpress ssl:renew-all [--staging] [--cert-name="porkpress-network"]
 ```
-
+<<<<<<< codex/implement-porkbun-txt-record-management-script
 ## Stand‑alone certbot hook
 
 `bin/porkbun-hook.php` can be used as the manual authentication and cleanup
@@ -38,6 +38,19 @@ certbot certonly \
 Certbot sets `CERTBOT_DOMAIN` and `CERTBOT_VALIDATION` which the hook consumes.
 If WordPress is not located automatically, set the environment variable
 `WP_LOAD_PATH` to the directory containing `wp-load.php`.
+=======
+## Porkbun API credentials
+
+The plugin requires a Porkbun API key and secret to manage domains. They can be
+supplied either through constants in `wp-config.php`:
+
+```
+define('PORKPRESS_API_KEY', 'pk_...');
+define('PORKPRESS_API_SECRET', 'sk_...');
+```
+
+or via the network settings stored in the options `porkpress_ssl_api_key` and
+`porkpress_ssl_api_secret`.
 
 ## Certificate and state locations
 
