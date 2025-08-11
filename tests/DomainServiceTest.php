@@ -115,23 +115,29 @@ class MockWpdb {
 require_once __DIR__ . '/../includes/class-logger.php';
 require_once __DIR__ . '/../includes/class-domain-service.php';
 require_once __DIR__ . '/../includes/class-porkbun-client.php';
+require_once __DIR__ . '/../includes/class-ssl-service.php';
 
 class DomainServiceTest extends TestCase {
     public function testListDomainsMapsTypeAndExpiry() {
         $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public int $calls = 0;
             public function __construct() {}
             public function listDomains( int $page = 1, int $per_page = 100 ) {
-                return [
-                    'status'  => 'SUCCESS',
-                    'domains' => [
-                        [
-                            'domain'     => 'example.com',
-                            'status'     => 'ACTIVE',
-                            'tld'        => 'com',
-                            'expireDate' => '2024-01-01',
+                $this->calls++;
+                if ( 1 === $this->calls ) {
+                    return [
+                        'status'  => 'SUCCESS',
+                        'domains' => [
+                            [
+                                'domain'     => 'example.com',
+                                'status'     => 'ACTIVE',
+                                'tld'        => 'com',
+                                'expireDate' => '2024-01-01',
+                            ],
                         ],
-                    ],
-                ];
+                    ];
+                }
+                return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
         };
 
@@ -157,6 +163,12 @@ class DomainServiceTest extends TestCase {
             public function __construct() {}
             public function listDomains( int $page = 1, int $per_page = 100 ) {
                 $this->calls++;
+                if ( 1 === $this->calls ) {
+                    return [ 'status' => 'SUCCESS', 'domains' => [ [ 'domain' => 'a.com' ] ] ];
+                }
+                if ( 2 === $this->calls ) {
+                    return [ 'status' => 'SUCCESS', 'domains' => [] ];
+                }
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
         };
@@ -171,7 +183,34 @@ class DomainServiceTest extends TestCase {
         $service->list_domains();
         $service->list_domains();
 
-        $this->assertSame( 1, $mock->calls );
+        $this->assertSame( 2, $mock->calls );
+    }
+
+    public function testListDomainsRetrievesMultiplePages() {
+        $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public int $calls = 0;
+            public function __construct() {}
+            public function listDomains( int $page = 1, int $per_page = 100 ) {
+                $this->calls++;
+                if ( 1 === $this->calls ) {
+                    return [ 'status' => 'SUCCESS', 'domains' => [ [ 'domain' => 'one.com' ] ] ];
+                }
+                if ( 2 === $this->calls ) {
+                    return [ 'status' => 'SUCCESS', 'domains' => [ [ 'domain' => 'two.com' ] ] ];
+                }
+                return [ 'status' => 'SUCCESS', 'domains' => [] ];
+            }
+        };
+
+        $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+        };
+
+        $result  = $service->list_domains( 1, 1 );
+        $domains = array_column( $result['domains'], 'domain' );
+
+        $this->assertSame( [ 'one.com', 'two.com' ], $domains );
+        $this->assertSame( 3, $mock->calls );
     }
 
     public function testIsDomainActiveUsesSingleEndpoint() {

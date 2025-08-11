@@ -197,62 +197,89 @@ private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
         *
         * @return array|Porkbun_Client_Error
         */
-      /**
-       * List domains.
-       *
-       * Results are cached for the duration of the request and persisted in a
-       * site transient for five minutes. Use
-       * {@see delete_site_transient()} with the `porkpress_ssl_domain_list`
-       * key to invalidate the cache when domain data changes.
-       *
-       * @param int $page     Page number.
-       * @param int $per_page Domains per page.
-       *
-       * @return array|Porkbun_Client_Error
-       */
-      public function list_domains( int $page = 1, int $per_page = 100 ) {
-              if ( null !== $this->domain_list_cache ) {
-                      return $this->domain_list_cache;
-              }
+    /**
+     * Clear the domain list cache.
+     */
+    protected function clear_domain_cache(): void {
+        $this->domain_list_cache = null;
+        if ( function_exists( 'delete_site_transient' ) ) {
+            delete_site_transient( self::DOMAIN_LIST_CACHE_KEY );
+        }
+    }
 
-              if ( function_exists( 'get_site_transient' ) ) {
-                      $cached = get_site_transient( self::DOMAIN_LIST_CACHE_KEY );
-                      if ( false !== $cached ) {
-                              $this->domain_list_cache = $cached;
-                              return $this->domain_list_cache;
-                      }
-              }
+    /**
+     * List domains.
+     *
+     * Results are cached for the duration of the request and persisted in a
+     * site transient for five minutes. Use
+     * {@see delete_site_transient()} with the `porkpress_ssl_domain_list`
+     * key to invalidate the cache when domain data changes.
+     *
+     * @param int $page     Page number.
+     * @param int $per_page Domains per page.
+     *
+     * @return array|Porkbun_Client_Error
+     */
+    public function list_domains( int $page = 1, int $per_page = 100 ) {
+        if ( null !== $this->domain_list_cache ) {
+            return $this->domain_list_cache;
+        }
 
-              $result = $this->client->listDomains( $page, $per_page );
+        if ( function_exists( 'get_site_transient' ) ) {
+            $cached = get_site_transient( self::DOMAIN_LIST_CACHE_KEY );
+            if ( false !== $cached ) {
+                $this->domain_list_cache = $cached;
+                return $this->domain_list_cache;
+            }
+        }
 
-              if ( $result instanceof Porkbun_Client_Error ) {
-                      return $result;
-              }
+        $status       = 'SUCCESS';
+        $all_domains  = array();
+        $current_page = $page;
 
-              if ( isset( $result['domains'] ) && is_array( $result['domains'] ) ) {
-                      $result['domains'] = array_map(
-                              function ( $domain ) {
-                                      if ( isset( $domain['tld'] ) && ! isset( $domain['type'] ) ) {
-                                              $domain['type'] = $domain['tld'];
-                                      }
-                                      if ( isset( $domain['expireDate'] ) && ! isset( $domain['expiry'] ) ) {
-                                              $domain['expiry'] = $domain['expireDate'];
-                                      }
+        do {
+            $result = $this->client->listDomains( $current_page, $per_page );
 
-                                      return $domain;
-                              },
-                              $result['domains']
-                      );
-              }
+            if ( $result instanceof Porkbun_Client_Error ) {
+                return $result;
+            }
 
-              $this->domain_list_cache = $result;
+            if ( isset( $result['status'] ) ) {
+                $status = $result['status'];
+            }
 
-              if ( function_exists( 'set_site_transient' ) ) {
-                      set_site_transient( self::DOMAIN_LIST_CACHE_KEY, $result, self::DOMAIN_LIST_CACHE_TTL );
-              }
+            $domains = isset( $result['domains'] ) && is_array( $result['domains'] ) ? $result['domains'] : array();
+            $domains = array_map(
+                function ( $domain ) {
+                    if ( isset( $domain['tld'] ) && ! isset( $domain['type'] ) ) {
+                        $domain['type'] = $domain['tld'];
+                    }
+                    if ( isset( $domain['expireDate'] ) && ! isset( $domain['expiry'] ) ) {
+                        $domain['expiry'] = $domain['expireDate'];
+                    }
 
-              return $result;
-      }
+                    return $domain;
+                },
+                $domains
+            );
+
+            $all_domains = array_merge( $all_domains, $domains );
+            $current_page++;
+        } while ( ! empty( $domains ) );
+
+        $final = array(
+            'status'  => $status,
+            'domains' => $all_domains,
+        );
+
+        $this->domain_list_cache = $final;
+
+        if ( function_exists( 'set_site_transient' ) ) {
+            set_site_transient( self::DOMAIN_LIST_CACHE_KEY, $final, self::DOMAIN_LIST_CACHE_TTL );
+        }
+
+        return $final;
+    }
 
        /**
         * Attach a domain to a site.
@@ -524,6 +551,7 @@ KEY domain (domain)
 
                if ( false !== $result ) {
                        SSL_Service::queue_issuance( $site_id );
+                       $this->clear_domain_cache();
                        return true;
                }
 
@@ -634,6 +662,7 @@ KEY domain (domain)
 
                if ( false !== $result ) {
                        SSL_Service::queue_issuance( $site_id );
+                       $this->clear_domain_cache();
                        return true;
                }
 
