@@ -43,7 +43,10 @@ class CLI extends WP_CLI_Command {
                         WP_CLI::error( '--domains is required.' );
                 }
                 $domains   = array_filter( array_map( 'trim', explode( ',', $assoc_args['domains'] ) ) );
-                $cert_name = $assoc_args['cert-name'] ?? 'porkpress-network';
+                $cert_name = $assoc_args['cert-name'] ?? get_site_option(
+                        'porkpress_ssl_cert_name',
+                        defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
+                );
                 $staging   = isset( $assoc_args['staging'] );
                 $this->run_certbot( $domains, $cert_name, $staging, false );
         }
@@ -69,7 +72,10 @@ class CLI extends WP_CLI_Command {
          * @param array $assoc_args Associative arguments.
          */
         public function renew_all( $args, $assoc_args ) {
-                $state_root    = defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl';
+                $state_root    = get_site_option(
+                        'porkpress_ssl_state_root',
+                        defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl'
+                );
                 $manifest_path = rtrim( $state_root, '/\\' ) . '/manifest.json';
                 if ( ! file_exists( $manifest_path ) ) {
                         WP_CLI::error( 'Manifest not found. Issue a certificate first.' );
@@ -79,7 +85,10 @@ class CLI extends WP_CLI_Command {
                         WP_CLI::error( 'Manifest does not contain domains.' );
                 }
                 $domains   = $manifest['domains'];
-                $cert_name = $assoc_args['cert-name'] ?? ( $manifest['cert_name'] ?? 'porkpress-network' );
+                $cert_name = $assoc_args['cert-name'] ?? ( $manifest['cert_name'] ?? get_site_option(
+                        'porkpress_ssl_cert_name',
+                        defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
+                ) );
                 $staging   = isset( $assoc_args['staging'] );
                 $this->run_certbot( $domains, $cert_name, $staging, true );
         }
@@ -93,8 +102,14 @@ class CLI extends WP_CLI_Command {
          * @param bool   $renewal    Force renewal of existing certificate.
          */
         protected function run_certbot( array $domains, string $cert_name, bool $staging, bool $renewal ) {
-                $cert_root  = defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt';
-                $state_root = defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl';
+                $cert_root  = get_site_option(
+                        'porkpress_ssl_cert_root',
+                        defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
+                );
+                $state_root = get_site_option(
+                        'porkpress_ssl_state_root',
+                        defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl'
+                );
 
                 if ( ! is_dir( $state_root ) ) {
                         wp_mkdir_p( $state_root );

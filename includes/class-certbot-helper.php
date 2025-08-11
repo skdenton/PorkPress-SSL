@@ -21,8 +21,14 @@ class Certbot_Helper {
      * @return string
      */
     public static function build_command( array $domains, string $cert_name, bool $staging, bool $renewal = false ): string {
-        $cert_root  = defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt';
-        $state_root = defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl';
+        $cert_root  = function_exists( '\\get_site_option' ) ? \get_site_option(
+                'porkpress_ssl_cert_root',
+                defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
+        ) : ( defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
+        $state_root = function_exists( '\\get_site_option' ) ? \get_site_option(
+                'porkpress_ssl_state_root',
+                defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl'
+        ) : ( defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
         $hook = dirname( __DIR__ ) . '/bin/porkbun-hook.php';
         $cmd  = 'certbot certonly --manual --non-interactive --agree-tos --manual-public-ip-logging-ok --preferred-challenges dns';
         $cmd .= ' --manual-auth-hook ' . escapeshellarg( $hook . ' add' );
