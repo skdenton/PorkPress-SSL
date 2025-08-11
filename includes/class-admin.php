@@ -12,7 +12,11 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Class Admin
  */
+
 class Admin {
+        /** Option key for stored domain requests. */
+        private const REQUESTS_OPTION = 'porkpress_ssl_domain_requests';
+
         /**
          * Initialize hooks.
          */
@@ -78,11 +82,12 @@ class Admin {
 
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'PorkPress SSL', 'porkpress-ssl' ) . '</h1>';
-		echo '<h2 class="nav-tab-wrapper">';
+               echo '<h2 class="nav-tab-wrapper">';
                $tabs = array(
                        'dashboard' => __( 'Dashboard', 'porkpress-ssl' ),
                        'sites'     => __( 'Sites', 'porkpress-ssl' ),
                        'domains'   => __( 'Domains', 'porkpress-ssl' ),
+                       'requests'  => __( 'Requests', 'porkpress-ssl' ),
                        'settings'  => __( 'Settings', 'porkpress-ssl' ),
                        'logs'      => __( 'Logs', 'porkpress-ssl' ),
                );
@@ -105,6 +110,9 @@ class Admin {
                                break;
                        case 'domains':
                                $this->render_domains_tab();
+                               break;
+                       case 'requests':
+                               $this->render_requests_tab();
                                break;
                        case 'settings':
                                $this->render_settings_tab();
@@ -571,10 +579,77 @@ class Admin {
                wp_send_json_success( $result );
        }
 
-/**
- * Render the settings tab for the network admin page.
- */
-public function render_settings_tab() {
+       /**
+        * Render the requests tab for the network admin page.
+        */
+       public function render_requests_tab() {
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       return;
+               }
+
+               if ( isset( $_POST['request_id'], $_POST['ppssl_action'] ) && check_admin_referer( 'porkpress_ssl_request_action' ) ) {
+                       $requests = get_site_option( self::REQUESTS_OPTION, array() );
+                       foreach ( $requests as $index => $req ) {
+                               if ( $req['id'] === sanitize_text_field( wp_unslash( $_POST['request_id'] ) ) ) {
+                                       if ( 'approve' === sanitize_key( wp_unslash( $_POST['ppssl_action'] ) ) ) {
+                                               $service = new Domain_Service();
+                                               $service->add_alias( (int) $req['site_id'], $req['domain'] );
+                                       }
+                                       unset( $requests[ $index ] );
+                                       update_site_option( self::REQUESTS_OPTION, array_values( $requests ) );
+                                       break;
+                               }
+                       }
+               }
+
+               $requests = get_site_option( self::REQUESTS_OPTION, array() );
+
+               echo '<h2>' . esc_html__( 'Pending Domain Requests', 'porkpress-ssl' ) . '</h2>';
+
+               if ( empty( $requests ) ) {
+                       echo '<p>' . esc_html__( 'No pending requests.', 'porkpress-ssl' ) . '</p>';
+                       return;
+               }
+
+               echo '<table class="widefat"><thead><tr>';
+               echo '<th>' . esc_html__( 'Site', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Domain', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Justification', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th>';
+               echo '</tr></thead><tbody>';
+
+               foreach ( $requests as $req ) {
+                       $site      = get_site( (int) $req['site_id'] );
+                       $site_name = $site ? get_blog_option( $site->id, 'blogname' ) : $req['site_id'];
+
+                       echo '<tr>';
+                       echo '<td>' . esc_html( $site_name ) . '</td>';
+                       echo '<td>' . esc_html( $req['domain'] ) . '</td>';
+                       echo '<td>' . esc_html( $req['justification'] ) . '</td>';
+                       echo '<td>';
+                       echo '<form method="post" style="display:inline">';
+                       wp_nonce_field( 'porkpress_ssl_request_action' );
+                       echo '<input type="hidden" name="request_id" value="' . esc_attr( $req['id'] ) . '" />';
+                       echo '<input type="hidden" name="ppssl_action" value="approve" />';
+                       echo '<input type="submit" class="button button-primary" value="' . esc_attr__( 'Approve', 'porkpress-ssl' ) . '" />';
+                       echo '</form> ';
+                       echo '<form method="post" style="display:inline">';
+                       wp_nonce_field( 'porkpress_ssl_request_action' );
+                       echo '<input type="hidden" name="request_id" value="' . esc_attr( $req['id'] ) . '" />';
+                       echo '<input type="hidden" name="ppssl_action" value="deny" />';
+                       echo '<input type="submit" class="button" value="' . esc_attr__( 'Deny', 'porkpress-ssl' ) . '" />';
+                       echo '</form>';
+                       echo '</td>';
+                       echo '</tr>';
+               }
+
+               echo '</tbody></table>';
+       }
+
+       /**
+        * Render the settings tab for the network admin page.
+        */
+       public function render_settings_tab() {
 $api_key_locked    = defined( 'PORKPRESS_API_KEY' );
 $api_secret_locked = defined( 'PORKPRESS_API_SECRET' );
 $cert_name_locked  = defined( 'PORKPRESS_CERT_NAME' );
@@ -1022,13 +1097,48 @@ echo '</form>';
  * Render the site plugin page.
  */
 public function render_site_page() {
-                if ( ! current_user_can( \PORKPRESS_SSL_CAP_REQUEST_DOMAIN ) ) {
-                        wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
-                }
-
-                echo '<div class="wrap">';
-                echo '<h1>' . esc_html__( 'Request Domain', 'porkpress-ssl' ) . '</h1>';
-                echo '<p>' . esc_html__( 'Domain request form coming soon.', 'porkpress-ssl' ) . '</p>';
-                echo '</div>';
+        if ( ! current_user_can( \PORKPRESS_SSL_CAP_REQUEST_DOMAIN ) ) {
+                wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
         }
+
+        $submitted = false;
+        if ( isset( $_POST['porkpress_ssl_domain'], $_POST['porkpress_ssl_justification'] ) && check_admin_referer( 'porkpress_ssl_request_domain' ) ) {
+                $domain        = sanitize_text_field( wp_unslash( $_POST['porkpress_ssl_domain'] ) );
+                $justification = sanitize_textarea_field( wp_unslash( $_POST['porkpress_ssl_justification'] ) );
+                $requests      = get_site_option( self::REQUESTS_OPTION, array() );
+                $requests[]    = array(
+                        'id'            => uniqid( '', true ),
+                        'site_id'       => get_current_blog_id(),
+                        'domain'        => $domain,
+                        'justification' => $justification,
+                );
+                update_site_option( self::REQUESTS_OPTION, $requests );
+
+                $site    = get_site( get_current_blog_id() );
+                $subject = __( 'New Domain Request', 'porkpress-ssl' );
+                $message = sprintf(
+                        __( 'Site %1$s requested domain %2$s. Justification: %3$s', 'porkpress-ssl' ),
+                        $site ? get_blog_option( $site->id, 'blogname' ) : get_current_blog_id(),
+                        $domain,
+                        $justification
+                );
+                Notifier::notify( 'warning', $subject, $message );
+                $submitted = true;
+        }
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Request Domain', 'porkpress-ssl' ) . '</h1>';
+        if ( $submitted ) {
+                echo '<div class="notice notice-success"><p>' . esc_html__( 'Request submitted.', 'porkpress-ssl' ) . '</p></div>';
+        }
+        echo '<form method="post">';
+        wp_nonce_field( 'porkpress_ssl_request_domain' );
+        echo '<table class="form-table" role="presentation">';
+        echo '<tr><th scope="row"><label for="porkpress-ssl-domain">' . esc_html__( 'Desired Domain', 'porkpress-ssl' ) . '</label></th><td><input name="porkpress_ssl_domain" type="text" id="porkpress-ssl-domain" class="regular-text" required></td></tr>';
+        echo '<tr><th scope="row"><label for="porkpress-ssl-justification">' . esc_html__( 'Justification', 'porkpress-ssl' ) . '</label></th><td><textarea name="porkpress_ssl_justification" id="porkpress-ssl-justification" class="large-text" rows="5" required></textarea></td></tr>';
+        echo '</table>';
+        submit_button( __( 'Submit Request', 'porkpress-ssl' ) );
+        echo '</form>';
+        echo '</div>';
+}
 }
