@@ -55,6 +55,8 @@ class NetworkEventsTest extends TestCase {
         $wpdb = new MockWpdb();
         $this->service = new class extends \PorkPress\SSL\Domain_Service {
             public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
         };
     }
 

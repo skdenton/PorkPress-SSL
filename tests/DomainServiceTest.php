@@ -1,8 +1,23 @@
 <?php
+namespace PorkPress\SSL {
+    function gethostbynamel( $host ) { return array( '1.1.1.1' ); }
+    function dns_get_record( $domain, $type ) { return $GLOBALS['dns_records'][ $domain ] ?? array(); }
+}
+
+namespace {
 use PHPUnit\Framework\TestCase;
 
 if ( ! defined( 'ABSPATH' ) ) {
     define( 'ABSPATH', __DIR__ );
+}
+if ( ! function_exists( 'network_home_url' ) ) {
+    function network_home_url() { return 'https://expected.test'; }
+}
+if ( ! function_exists( 'home_url' ) ) {
+    function home_url() { return 'https://expected.test'; }
+}
+if ( ! function_exists( 'wp_parse_url' ) ) {
+    function wp_parse_url( $url, $component = -1 ) { return parse_url( $url, $component ); }
 }
 if ( ! function_exists( 'sanitize_text_field' ) ) {
     function sanitize_text_field( $str ) {
@@ -40,6 +55,7 @@ if ( ! function_exists( 'get_site_option' ) ) {
         return $GLOBALS['porkpress_site_options'][ $key ] ?? $default;
     }
 }
+$GLOBALS['dns_records'] = array();
 if ( ! function_exists( 'update_site_option' ) ) {
     function update_site_option( $key, $value ) {
         $GLOBALS['porkpress_site_options'][ $key ] = $value;
@@ -90,7 +106,6 @@ if ( ! function_exists( 'apply_filters' ) ) {
         return $value;
     }
 }
-
 if ( ! class_exists( 'WP_Error' ) ) {
     class WP_Error {
         protected $message;
@@ -253,6 +268,8 @@ class DomainServiceTest extends TestCase {
 
         $service = new class extends \PorkPress\SSL\Domain_Service {
             public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
         };
 
         $table = $service::get_alias_table_name();
@@ -284,7 +301,7 @@ class DomainServiceTest extends TestCase {
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public array $args = array();
             public function __construct() {}
-            public function createARecord( string $domain, string $name, string $content, int $ttl = 300 ) {
+            public function createARecord( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
                 $this->args = func_get_args();
                 return array( 'status' => 'SUCCESS' );
             }
@@ -292,13 +309,11 @@ class DomainServiceTest extends TestCase {
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
-            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool { return true; }
-            protected function get_network_ip(): string { return '1.1.1.1'; }
             public function check_dns_health( string $domain ) { return true; }
         };
 
         $this->assertTrue( $service->attach_to_site( 'example.com', 1, 600 ) );
-        $this->assertSame( ['example.com', '', '1.1.1.1', 600], $client->args );
+        $this->assertSame( ['example.com', '', '1.1.1.1', 600, 'A'], $client->args );
     }
 
     public function testAttachToSiteReturnsErrorOnApiFailure() {
@@ -311,15 +326,13 @@ class DomainServiceTest extends TestCase {
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            public function createARecord( string $domain, string $name, string $content, int $ttl = 300 ) {
+            public function createARecord( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
                 return new \PorkPress\SSL\Porkbun_Client_Error( 'err', 'fail' );
             }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
-            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool { return true; }
-            protected function get_network_ip(): string { return '1.1.1.1'; }
             public function check_dns_health( string $domain ) { return true; }
         };
 
@@ -334,8 +347,6 @@ class DomainServiceTest extends TestCase {
     public function testAttachToSiteReturnsErrorOnDnsMismatch() {
         $service = new class extends \PorkPress\SSL\Domain_Service {
             public function __construct() { $this->missing_credentials = false; }
-            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool { return true; }
-            protected function get_network_ip(): string { return '1.1.1.1'; }
             public function check_dns_health( string $domain ) { return new WP_Error( 'dns', 'bad' ); }
         };
 
@@ -349,13 +360,11 @@ class DomainServiceTest extends TestCase {
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            public function createARecord( string $domain, string $name, string $content, int $ttl = 300 ) { return array( 'status' => 'SUCCESS' ); }
+            public function createARecord( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) { return array( 'status' => 'SUCCESS' ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
-            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool { return true; }
-            protected function get_network_ip(): string { return '1.1.1.1'; }
             public function check_dns_health( string $domain ) { return new WP_Error( 'dns', 'bad' ); }
         };
 
@@ -369,6 +378,8 @@ class DomainServiceTest extends TestCase {
 
         $service = new class extends \PorkPress\SSL\Domain_Service {
             public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
         };
 
         $service->add_alias( 1, 'one.com', true );
@@ -379,6 +390,57 @@ class DomainServiceTest extends TestCase {
         $map     = array_column( $aliases, 'is_primary', 'domain' );
         $this->assertSame( 1, $map['two.com'] );
         $this->assertSame( 0, $map['one.com'] );
+    }
+
+    public function testDeleteAliasRemovesARecord() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $deleted = array();
+            public function __construct() {}
+            public function getRecords( string $domain ) {
+                return array( 'records' => array(
+                    array( 'id' => 1, 'type' => 'A', 'content' => '1.1.1.1', 'name' => '' ),
+                    array( 'id' => 2, 'type' => 'AAAA', 'content' => '::1', 'name' => '' ),
+                ) );
+            }
+            public function deleteRecord( string $domain, int $record_id ) {
+                $this->deleted[] = $record_id;
+                return array( 'status' => 'SUCCESS' );
+            }
+            public function createARecord( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+                return array( 'status' => 'SUCCESS' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+            protected function get_network_ipv6(): string { return '::1'; }
+        };
+
+        $service->add_alias( 1, 'example.com', true, 'active' );
+        $service->delete_alias( 1, 'example.com' );
+
+        $this->assertSame( array( 1, 2 ), $client->deleted );
+    }
+
+    public function testCheckDnsHealthFailsWhenNoARecord() {
+        global $dns_records;
+        $dns_records = array(
+            'expected.test' => array(),
+            'domain.test'   => array(
+                array( 'type' => 'AAAA', 'ipv6' => '::1' ),
+            ),
+        );
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() { $this->missing_credentials = false; }
+        };
+
+        $result = $service->check_dns_health( 'domain.test' );
+        $this->assertInstanceOf( WP_Error::class, $result );
     }
 
     public function testConstructorNotifiesOnMissingCredentials() {
@@ -394,6 +456,9 @@ class DomainServiceTest extends TestCase {
 
     protected function tearDown(): void {
         unset( $GLOBALS['porkpress_skip_dns_check'] );
+        $GLOBALS['dns_records'] = array();
     }
+}
+
 }
 

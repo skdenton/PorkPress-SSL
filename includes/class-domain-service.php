@@ -148,9 +148,11 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                        return new \WP_Error( 'dns_lookup_failed', __( 'DNS lookup failed or returned no records.', 'porkpress-ssl' ) );
                }
 
+               $found_a = false;
                foreach ( $records as $record ) {
                        switch ( $record['type'] ) {
                                case 'A':
+                                       $found_a = true;
                                        if ( ! in_array( $record['ip'], $expected_ipv4, true ) ) {
                                                return new \WP_Error(
                                                        'dns_mismatch',
@@ -191,6 +193,10 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                                        }
                                        break;
                        }
+               }
+
+               if ( ! $found_a ) {
+                       return new \WP_Error( 'dns_missing_a_record', sprintf( __( 'Domain %s has no A record.', 'porkpress-ssl' ), $domain ) );
                }
 
                return true;
@@ -335,17 +341,12 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                        update_site_meta( $site_id, 'porkpress_domain', $domain );
                }
 
-               $result = $this->add_alias( $site_id, $domain, true, 'active' );
-               if ( $result instanceof Porkbun_Client_Error ) {
-                       return $result;
-               }
-
                $ttl = $ttl ?? 300;
                if ( function_exists( 'apply_filters' ) ) {
                        $ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
                }
 
-               $result = $this->create_a_record( $domain, $site_id, $ttl );
+               $result = $this->add_alias( $site_id, $domain, true, 'active', $ttl );
                if ( $result instanceof Porkbun_Client_Error ) {
                        return $result;
                }
@@ -447,24 +448,83 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
         * @return bool|Porkbun_Client_Error
         */
        protected function create_a_record( string $domain, int $site_id, int $ttl ) {
-               $ip = $this->get_network_ip();
-               if ( ! $ip ) {
+               $ipv4 = $this->get_network_ip();
+               $ipv6 = $this->get_network_ipv6();
+
+               if ( ! $ipv4 && ! $ipv6 ) {
                        return true;
                }
 
-               $result = $this->client->createARecord( $domain, '', $ip, $ttl );
-               if ( $result instanceof Porkbun_Client_Error ) {
-                       \PorkPress\SSL\Logger::error(
-                               'create_a_record',
-                               array(
-                                       'domain'  => $domain,
-                                       'site_id' => $site_id,
-                                       'ip'      => $ip,
-                                       'ttl'     => $ttl,
-                               ),
-                               $result->message
-                       );
-                       return $result;
+               if ( $ipv4 ) {
+                       $result = $this->client->createARecord( $domain, '', $ipv4, $ttl, 'A' );
+                       if ( $result instanceof Porkbun_Client_Error ) {
+                               \PorkPress\SSL\Logger::error(
+                                       'create_a_record',
+                                       array(
+                                               'domain'  => $domain,
+                                               'site_id' => $site_id,
+                                               'ip'      => $ipv4,
+                                               'ttl'     => $ttl,
+                                       ),
+                                       $result->message
+                               );
+                               return $result;
+                       }
+               }
+
+               if ( $ipv6 ) {
+                       $result = $this->client->createARecord( $domain, '', $ipv6, $ttl, 'AAAA' );
+                       if ( $result instanceof Porkbun_Client_Error ) {
+                               \PorkPress\SSL\Logger::error(
+                                       'create_a_record',
+                                       array(
+                                               'domain'  => $domain,
+                                               'site_id' => $site_id,
+                                               'ip'      => $ipv6,
+                                               'ttl'     => $ttl,
+                                       ),
+                                       $result->message
+                               );
+                               return $result;
+                       }
+               }
+
+               return true;
+       }
+
+       /**
+        * Remove A/AAAA records pointing to the network IPs.
+        *
+        * @param string $domain  Domain name.
+        * @param int    $site_id Site ID.
+        *
+        * @return bool|Porkbun_Client_Error
+        */
+       protected function delete_a_record( string $domain, int $site_id ) {
+               $ipv4 = $this->get_network_ip();
+               $ipv6 = $this->get_network_ipv6();
+
+               $records = $this->client->getRecords( $domain );
+               if ( $records instanceof Porkbun_Client_Error ) {
+                       \PorkPress\SSL\Logger::error( 'delete_a_record', array( 'domain' => $domain, 'site_id' => $site_id ), $records->message );
+                       return $records;
+               }
+
+               foreach ( $records['records'] ?? array() as $rec ) {
+                       $name = $rec['name'] ?? '';
+                       if ( '' !== $name && '@' !== $name ) {
+                               continue;
+                       }
+                       $type    = $rec['type'] ?? '';
+                       $content = $rec['content'] ?? '';
+
+                       if ( ( 'A' === $type && $ipv4 && $content === $ipv4 ) || ( 'AAAA' === $type && $ipv6 && $content === $ipv6 ) ) {
+                               $del = $this->client->deleteRecord( $domain, (int) $rec['id'] );
+                               if ( $del instanceof Porkbun_Client_Error ) {
+                                       \PorkPress\SSL\Logger::error( 'delete_a_record', array( 'domain' => $domain, 'site_id' => $site_id, 'record_id' => $rec['id'] ), $del->message );
+                                       return $del;
+                               }
+                       }
                }
 
                return true;
@@ -502,6 +562,41 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                        $ip = gethostbyname( $host );
                        if ( $ip !== $host ) {
                                return $ip;
+                       }
+               }
+
+               return '';
+       }
+
+       /**
+        * Detect the network's IPv6 address.
+        */
+       protected function get_network_ipv6(): string {
+               $home = '';
+               if ( function_exists( 'network_home_url' ) ) {
+                       $home = network_home_url();
+               } elseif ( function_exists( 'home_url' ) ) {
+                       $home = home_url();
+               }
+
+               if ( ! $home ) {
+                       return '';
+               }
+
+               $parse_fn = function_exists( 'wp_parse_url' ) ? 'wp_parse_url' : 'parse_url';
+               $host     = (string) $parse_fn( $home, PHP_URL_HOST );
+               if ( ! $host ) {
+                       return '';
+               }
+
+               if ( function_exists( 'dns_get_record' ) ) {
+                       $records = dns_get_record( $host, DNS_AAAA );
+                       if ( is_array( $records ) ) {
+                               foreach ( $records as $r ) {
+                                       if ( ! empty( $r['ipv6'] ) ) {
+                                               return (string) $r['ipv6'];
+                                       }
+                               }
                        }
                }
 
@@ -574,9 +669,11 @@ KEY domain (domain)
         * @param bool   $is_primary Whether the alias is primary.
         * @param string $status     Alias status.
         *
-        * @return bool True on success, false on failure.
+        * @param int|null $ttl Optional TTL for DNS records.
+        *
+        * @return bool|Porkbun_Client_Error True on success, false on failure, or error on API failure.
         */
-       public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '' ): bool {
+       public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '', ?int $ttl = null ) {
                global $wpdb;
 
                $table = self::get_alias_table_name();
@@ -589,13 +686,23 @@ KEY domain (domain)
 
                $result = $wpdb->insert( $table, $data, array( '%d', '%s', '%d', '%s' ) );
 
-               if ( false !== $result ) {
-                       SSL_Service::queue_issuance( $site_id );
-                       $this->clear_domain_cache();
-                       return true;
+               if ( false === $result ) {
+                       return false;
                }
 
-               return false;
+               $ttl = $ttl ?? 300;
+               if ( function_exists( 'apply_filters' ) ) {
+                       $ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
+               }
+
+               $dns = $this->create_a_record( $domain, $site_id, $ttl );
+               if ( $dns instanceof Porkbun_Client_Error ) {
+                       return $dns;
+               }
+
+               SSL_Service::queue_issuance( $site_id );
+               $this->clear_domain_cache();
+               return true;
        }
 
        /**
@@ -681,14 +788,14 @@ KEY domain (domain)
        }
 
        /**
-        * Delete a domain alias.
+        * Delete a domain alias and associated DNS records.
         *
         * @param int    $site_id Site ID.
         * @param string $domain  Domain name.
         *
-        * @return bool True on success, false on failure.
+        * @return bool|Porkbun_Client_Error True on success, false on failure, or error on API failure.
         */
-       public function delete_alias( int $site_id, string $domain ): bool {
+       public function delete_alias( int $site_id, string $domain ) {
                global $wpdb;
 
                $result = $wpdb->delete(
@@ -700,13 +807,18 @@ KEY domain (domain)
                        array( '%d', '%s' )
                );
 
-               if ( false !== $result ) {
-                       SSL_Service::queue_issuance( $site_id );
-                       $this->clear_domain_cache();
-                       return true;
+               if ( false === $result ) {
+                       return false;
                }
 
-               return false;
+               $dns = $this->delete_a_record( $domain, $site_id );
+               if ( $dns instanceof Porkbun_Client_Error ) {
+                       return $dns;
+               }
+
+               SSL_Service::queue_issuance( $site_id );
+               $this->clear_domain_cache();
+               return true;
        }
 
        /**
