@@ -64,6 +64,8 @@ class ReconcilerTest extends TestCase {
                 $this->client = $client;
                 $this->missing_credentials = false;
             }
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
         };
 
         // Add aliases to the mock table.
@@ -115,6 +117,8 @@ class ReconcilerTest extends TestCase {
                 $this->client              = $client;
                 $this->missing_credentials = false;
             }
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
         };
 
         $service->add_alias( 1, 'existing.com', true );
@@ -169,6 +173,8 @@ class ReconcilerTest extends TestCase {
                 $this->client              = $client;
                 $this->missing_credentials = false;
             }
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
         };
 
         $service->add_alias( 1, 'existing.com', true );

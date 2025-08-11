@@ -118,17 +118,17 @@ class Porkbun_Client {
 		return $this->deleteRecord( $domain, $record_id );
 	}
 
-	/**
-	 * Create an A record.
-	 */
-	public function createARecord( string $domain, string $name, string $content, int $ttl = 300 ) {
-		return $this->request( "dns/create/{$domain}", [
-			'type'	  => 'A',
-			'name'	  => $name,
-			'content' => $content,
-			'ttl'	  => $ttl,
-		] );
-	}
+        /**
+         * Create an A or AAAA record.
+         */
+        public function createARecord( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+                return $this->request( "dns/create/{$domain}", [
+                        'type'    => $type,
+                        'name'    => $name,
+                        'content' => $content,
+                        'ttl'     => $ttl,
+                ] );
+        }
 
 	/**
 	 * Delete a record by ID.
