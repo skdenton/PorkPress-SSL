@@ -18,7 +18,7 @@ if ( ! defined( 'ARRAY_A' ) ) {
     define( 'ARRAY_A', 'ARRAY_A' );
 }
 
-require_once __DIR__ . '/DomainServiceTest.php'; // For MockWpdb.
+require_once __DIR__ . '/helpers/MockWpdb.php';
 require_once __DIR__ . '/../includes/class-porkbun-client.php';
 require_once __DIR__ . '/../includes/class-porkbun-client-dryrun.php';
 require_once __DIR__ . '/../includes/class-domain-service.php';

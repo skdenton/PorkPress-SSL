@@ -41,7 +41,7 @@ if ( ! defined( 'ARRAY_A' ) ) {
 require_once __DIR__ . '/../includes/class-domain-service.php';
 require_once __DIR__ . '/../includes/class-porkbun-client.php';
 require_once __DIR__ . '/../includes/class-reconciler.php';
-require_once __DIR__ . '/DomainServiceTest.php'; // For MockWpdb class.
+require_once __DIR__ . '/helpers/MockWpdb.php';
 
 class ReconcilerTest extends TestCase {
     public function testArchivesSiteWhenPrimaryDomainMissing() {
