@@ -44,7 +44,7 @@ if ( ! defined( 'ARRAY_A' ) ) {
     define( 'ARRAY_A', 'ARRAY_A' );
 }
 
-require_once __DIR__ . '/DomainServiceTest.php'; // Provides MockWpdb and includes Domain_Service.
+require_once __DIR__ . '/helpers/MockWpdb.php';
 require_once __DIR__ . '/../porkpress-ssl.php';
 
 class NetworkEventsTest extends TestCase {
