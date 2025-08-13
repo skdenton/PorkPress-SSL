@@ -12,6 +12,7 @@ class CertbotHelperTest extends TestCase {
 
         $this->assertStringContainsString( '--test-cert', $cmd );
         $this->assertStringContainsString( '--force-renewal', $cmd );
+        $this->assertStringContainsString( '--deploy-hook', $cmd );
         $this->assertStringContainsString( "-d 'example.com'", $cmd );
         $this->assertStringContainsString( "-d 'www.example.com'", $cmd );
     }

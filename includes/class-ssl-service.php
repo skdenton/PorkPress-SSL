@@ -163,7 +163,20 @@ class SSL_Service {
                        return;
                }
 
-               Renewal_Service::write_manifest( $all_domains, $cert_name );
+               $manifest_ok = Renewal_Service::write_manifest( $all_domains, $cert_name );
+               $deploy_ok   = Renewal_Service::deploy_to_apache( $cert_name );
+               if ( ! $manifest_ok || ! $deploy_ok ) {
+                       Logger::error(
+                               'issue_certificate',
+                               array(
+                                       'site_ids' => $queue,
+                                       'domains'  => $all_domains,
+                               ),
+                               'post-deploy failed'
+                       );
+                       return;
+               }
+
                Logger::info(
                        'issue_certificate',
                        array(

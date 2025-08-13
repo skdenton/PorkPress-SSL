@@ -37,6 +37,7 @@ class Certbot_Helper {
         $cmd  = 'certbot certonly --manual --non-interactive --agree-tos --manual-public-ip-logging-ok --preferred-challenges dns';
         $cmd .= ' --manual-auth-hook ' . escapeshellarg( $hook . ' add' );
         $cmd .= ' --manual-cleanup-hook ' . escapeshellarg( $hook . ' del' );
+        $cmd .= ' --deploy-hook ' . escapeshellarg( $hook . ' deploy' );
         $cmd .= ' --cert-name ' . escapeshellarg( $cert_name );
         if ( $cert_root ) {
             $cmd .= ' --config-dir ' . escapeshellarg( $cert_root );

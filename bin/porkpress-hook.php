@@ -8,6 +8,7 @@ use PorkPress\SSL\Logger;
 use PorkPress\SSL\Porkbun_Client;
 use PorkPress\SSL\Porkbun_Client_Error;
 use PorkPress\SSL\TXT_Propagation_Waiter;
+use PorkPress\SSL\Renewal_Service;
 
 // Parse CLI options (--wp-root and --config).
 $opts = [];
@@ -142,12 +143,30 @@ if ( 'add' === $action || 'auth' === $action ) {
 }
 
 if ( 'deploy' === $action || 'renew' === $action ) {
-    Logger::info('certbot_hook', [
+    $cert_name = getenv('CERTBOT_CERT_NAME') ?: get_site_option(
+        'porkpress_ssl_cert_name',
+        defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
+    );
+    $domains   = preg_split('/\s+/', trim(getenv('RENEWED_DOMAINS') ?: '')) ?: array();
+
+    $ok_manifest = Renewal_Service::write_manifest( $domains, $cert_name );
+    $ok_deploy   = Renewal_Service::deploy_to_apache( $cert_name );
+
+    if ( $ok_manifest && $ok_deploy ) {
+        Logger::info( 'certbot_hook', [
+            'action'  => $action,
+            'renewed' => getenv('RENEWED_DOMAINS') ?: '',
+            'failed'  => getenv('FAILED_DOMAINS') ?: '',
+        ], 'deploy success' );
+        exit(0);
+    }
+
+    Logger::error( 'certbot_hook', [
         'action'  => $action,
         'renewed' => getenv('RENEWED_DOMAINS') ?: '',
         'failed'  => getenv('FAILED_DOMAINS') ?: '',
-    ], 'noop');
-    exit(0);
+    ], 'deploy failed' );
+    exit(1);
 }
 
 // Deletion path.
