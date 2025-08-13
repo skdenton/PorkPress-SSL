@@ -656,6 +656,14 @@ $cert_name_locked  = defined( 'PORKPRESS_CERT_NAME' );
 $cert_root_locked  = defined( 'PORKPRESS_CERT_ROOT' );
 $state_root_locked = defined( 'PORKPRESS_STATE_ROOT' );
 
+        if ( isset( $_POST['porkpress_adopt_cert'] ) && isset( $_POST['porkpress_adopt_cert_name'] ) ) {
+            check_admin_referer( 'porkpress_adopt_cert' );
+            if ( ! $cert_name_locked ) {
+                update_site_option( 'porkpress_ssl_cert_name', sanitize_text_field( wp_unslash( $_POST['porkpress_adopt_cert_name'] ) ) );
+                echo '<div class="updated"><p>' . esc_html__( 'Certificate lineage adopted.', 'porkpress-ssl' ) . '</p></div>';
+            }
+        }
+
         if ( isset( $_POST['porkpress_ssl_settings_nonce'] ) ) {
             check_admin_referer( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
 
@@ -756,6 +764,39 @@ $network_wildcard = (bool) get_site_option( 'porkpress_ssl_network_wildcard', 0 
         $dry_run        = (bool) get_site_option( 'porkpress_ssl_dry_run', 0 );
         $apache_reload  = (bool) get_site_option( 'porkpress_ssl_apache_reload', 1 );
         $apache_cmd     = get_site_option( 'porkpress_ssl_apache_reload_cmd', 'apachectl -k reload' );
+        $certbot_certs = Certbot_Helper::list_certificates();
+        if ( ! empty( $certbot_certs ) && ! $cert_name_locked ) {
+                $network_hosts = array();
+                if ( function_exists( 'network_home_url' ) ) {
+                        $parse = function_exists( 'wp_parse_url' ) ? 'wp_parse_url' : 'parse_url';
+                        $host  = $parse( network_home_url(), PHP_URL_HOST );
+                        if ( $host ) {
+                                $network_hosts[] = strtolower( $host );
+                        }
+                }
+                if ( defined( 'DOMAIN_CURRENT_SITE' ) ) {
+                        $network_hosts[] = strtolower( DOMAIN_CURRENT_SITE );
+                }
+                $network_hosts = array_unique( array_filter( $network_hosts ) );
+
+                echo '<h2>' . esc_html__( 'Adopt Existing Certificate', 'porkpress-ssl' ) . '</h2>';
+                echo '<p>' . esc_html__( 'Select a certificate lineage to reuse for future requests.', 'porkpress-ssl' ) . '</p>';
+                echo '<table class="widefat"><thead><tr><th>' . esc_html__( 'Certificate Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Domains', 'porkpress-ssl' ) . '</th><th></th></tr></thead><tbody>';
+                foreach ( $certbot_certs as $name => $info ) {
+                        $domains  = $info['domains'];
+                        $is_rec   = ! empty( array_intersect( $network_hosts, array_map( 'strtolower', $domains ) ) );
+                        echo '<tr>';
+                        echo '<td>' . esc_html( $name ) . ( $is_rec ? ' <strong>' . esc_html__( '(recommended)', 'porkpress-ssl' ) . '</strong>' : '' ) . '</td>';
+                        echo '<td>' . esc_html( implode( ', ', $domains ) ) . '</td>';
+                        echo '<td><form method="post" style="margin:0;">';
+                        wp_nonce_field( 'porkpress_adopt_cert' );
+                        echo '<input type="hidden" name="porkpress_adopt_cert_name" value="' . esc_attr( $name ) . '" />';
+                        submit_button( __( 'Adopt', 'porkpress-ssl' ), 'secondary', 'porkpress_adopt_cert', false );
+                        echo '</form></td>';
+                        echo '</tr>';
+                }
+                echo '</tbody></table>';
+        }
 
 echo '<form method="post">';
 wp_nonce_field( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
