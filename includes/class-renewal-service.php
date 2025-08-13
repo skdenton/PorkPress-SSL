@@ -103,8 +103,13 @@ $result = self::execute( $cmd );
         return;
         }
 
-        self::write_manifest( $manifest['domains'], $cert_name );
-        self::deploy_to_apache( $cert_name );
+        $manifest_ok = self::write_manifest( $manifest['domains'], $cert_name );
+        $deploy_ok   = self::deploy_to_apache( $cert_name );
+        if ( ! $manifest_ok || ! $deploy_ok ) {
+            Logger::error( 'renew_certificate', array( 'attempt' => $attempt ), 'post-deploy failed' );
+            return;
+        }
+
         Logger::info( 'renew_certificate', array( 'attempt' => $attempt ), 'success' );
         update_site_option( self::OPTION_ATTEMPTS, 0 );
         update_site_option( self::OPTION_EXPIRY_NOTIFIED, $manifest['expires_at'] ?? '' );
@@ -164,7 +169,7 @@ return Certbot_Helper::build_command( $domains, $cert_name, $staging, $renewal )
  * @param array  $domains   Domains included.
  * @param string $cert_name Certificate name.
  */
-public static function write_manifest( array $domains, string $cert_name ): void {
+    public static function write_manifest( array $domains, string $cert_name ): bool {
 $cert_root  = get_site_option(
 'porkpress_ssl_cert_root',
 defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
@@ -195,21 +200,33 @@ $manifest = array(
 'expires_at' => $expires_at,
 'paths'      => $paths,
 );
-if ( ! is_dir( $state_root ) ) {
-wp_mkdir_p( $state_root );
-}
-file_put_contents( rtrim( $state_root, '/\\' ) . '/manifest.json', wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
-}
+    if ( ! is_dir( $state_root ) ) {
+        wp_mkdir_p( $state_root );
+    }
+    $path  = rtrim( $state_root, '/\\' ) . '/manifest.json';
+    $bytes = @file_put_contents( $path, wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+    if ( false === $bytes ) {
+        $err = error_get_last();
+        Logger::error( 'write_manifest', array( 'path' => $path, 'error' => $err['message'] ?? '' ), 'write failed' );
+        \PorkPress\SSL\Notifier::notify(
+            'error',
+            __( 'SSL manifest write failed', 'porkpress-ssl' ),
+            sprintf( __( 'Could not write manifest to %s: %s', 'porkpress-ssl' ), $path, $err['message'] ?? '' )
+        );
+        return false;
+    }
+    return true;
+    }
 
     /**
      * Copy or symlink certificate files into Apache vhost directories and reload Apache.
      *
      * @param string $cert_name Certificate lineage name.
      */
-    protected static function deploy_to_apache( string $cert_name ): void {
+    public static function deploy_to_apache( string $cert_name ): bool {
         $enabled = (bool) get_site_option( 'porkpress_ssl_apache_reload', 1 );
         if ( ! $enabled ) {
-            return;
+            return true;
         }
 
         $cert_root = get_site_option(
@@ -222,11 +239,13 @@ file_put_contents( rtrim( $state_root, '/\\' ) . '/manifest.json', wp_json_encod
             'privkey'   => $live_dir . '/privkey.pem',
         );
 
+        $ok    = true;
         $confs = glob( '/etc/apache2/sites-available/*.conf' ) ?: array();
         foreach ( $confs as $conf ) {
             $dest_dir = preg_replace( '/\.conf$/', '', $conf );
             if ( ! is_dir( $dest_dir ) && ! wp_mkdir_p( $dest_dir ) ) {
                 Logger::error( 'apache_deploy', array( 'dir' => $dest_dir ), 'mkdir failed' );
+                $ok = false;
                 continue;
             }
             foreach ( $source as $name => $src ) {
@@ -242,6 +261,7 @@ file_put_contents( rtrim( $state_root, '/\\' ) . '/manifest.json', wp_json_encod
                             array( 'src' => $src, 'dest' => $dest, 'error' => $err['message'] ?? '' ),
                             'copy failed'
                         );
+                        $ok = false;
                     }
                 }
             }
@@ -260,9 +280,16 @@ file_put_contents( rtrim( $state_root, '/\\' ) . '/manifest.json', wp_json_encod
             } else {
                 Logger::error( 'apache_reload', $context, 'failed' );
             }
+            $ok = false;
         } else {
             Logger::info( 'apache_reload', array( 'cmd' => $cmd ), 'success' );
         }
+
+        if ( ! $ok ) {
+            \PorkPress\SSL\Notifier::notify( 'error', __( 'SSL deploy failed', 'porkpress-ssl' ), __( 'Apache reload or file copy failed during certificate deployment.', 'porkpress-ssl' ) );
+        }
+
+        return $ok;
     }
 
 /**
@@ -322,9 +349,19 @@ $manifest = array(
 'expires_at' => $expires_at,
 'paths'      => $paths,
 );
-$encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
-file_put_contents( $manifest_path, $encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
-return $manifest;
+        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+        $bytes  = @file_put_contents( $manifest_path, $encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+        if ( false === $bytes ) {
+            $err = error_get_last();
+            Logger::error( 'write_manifest', array( 'path' => $manifest_path, 'error' => $err['message'] ?? '' ), 'write failed' );
+            \PorkPress\SSL\Notifier::notify(
+                'error',
+                __( 'SSL manifest write failed', 'porkpress-ssl' ),
+                sprintf( __( 'Could not write manifest to %s: %s', 'porkpress-ssl' ), $manifest_path, $err['message'] ?? '' )
+            );
+            return null;
+        }
+        return $manifest;
 }
 }
 return null;

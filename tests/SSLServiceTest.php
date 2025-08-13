@@ -33,7 +33,7 @@ if ( ! function_exists( 'wp_mail' ) ) {
     function wp_mail( $to, $subject, $message ) {}
 }
 if ( ! function_exists( 'wp_mkdir_p' ) ) {
-    function wp_mkdir_p( $dir ) { if ( ! is_dir( $dir ) ) { mkdir( $dir, 0777, true ); } }
+    function wp_mkdir_p( $dir ) { if ( ! is_dir( $dir ) ) { return mkdir( $dir, 0777, true ); } return true; }
 }
 
 if ( ! function_exists( 'wp_next_scheduled' ) ) {
@@ -102,6 +102,19 @@ class SSLServiceTest extends TestCase {
         if ( ! is_dir( PORKPRESS_CERT_ROOT ) ) {
             mkdir( PORKPRESS_CERT_ROOT, 0777, true );
         }
+
+        if ( ! is_dir( PORKPRESS_CERT_ROOT . '/live/porkpress-network' ) ) {
+            mkdir( PORKPRESS_CERT_ROOT . '/live/porkpress-network', 0777, true );
+        }
+        file_put_contents( PORKPRESS_CERT_ROOT . '/live/porkpress-network/fullchain.pem', 'full' );
+        file_put_contents( PORKPRESS_CERT_ROOT . '/live/porkpress-network/privkey.pem', 'key' );
+        file_put_contents( PORKPRESS_CERT_ROOT . '/live/porkpress-network/cert.pem', 'cert' );
+
+        @mkdir('/etc/apache2/sites-available', 0777, true);
+        @unlink('/etc/apache2/sites-available/porkpress-network/fullchain.pem');
+        @unlink('/etc/apache2/sites-available/porkpress-network/privkey.pem');
+        @rmdir('/etc/apache2/sites-available/porkpress-network');
+        file_put_contents('/etc/apache2/sites-available/porkpress-network.conf', '');
     }
 
     public function testQueueAndRun() {
@@ -139,9 +152,9 @@ class SSLServiceTest extends TestCase {
             }
         };
 
-        $captured_cmd = '';
-        \PorkPress\SSL\Renewal_Service::$runner = function( $cmd ) use ( &$captured_cmd ) {
-            $captured_cmd = $cmd;
+        $commands = array();
+        \PorkPress\SSL\Renewal_Service::$runner = function( $cmd ) use ( &$commands ) {
+            $commands[] = $cmd;
             return array( 'code' => 0, 'output' => 'ok' );
         };
 
@@ -149,7 +162,7 @@ class SSLServiceTest extends TestCase {
 
         $expected_domains = array( 'example.com', 'www.example.com', 'foo.com' );
         $expected_cmd     = \PorkPress\SSL\Renewal_Service::build_certbot_command( $expected_domains, 'porkpress-network', false, false );
-        $this->assertSame( $expected_cmd, $captured_cmd );
+        $this->assertSame( $expected_cmd, $commands[0] );
 
         $manifest = json_decode( file_get_contents( PORKPRESS_STATE_ROOT . '/manifest.json' ), true );
         $this->assertSame( $expected_domains, $manifest['domains'] );

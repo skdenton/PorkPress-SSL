@@ -134,32 +134,13 @@ class CLI extends WP_CLI_Command {
                         WP_CLI::error( 'certbot failed: ' . $result->stderr );
                 }
 
-                $live_dir = rtrim( $cert_root, '/\\' ) . '/live/' . $cert_name;
-                $paths    = [
-                        'fullchain' => $live_dir . '/fullchain.pem',
-                        'privkey'   => $live_dir . '/privkey.pem',
-                        'chain'     => $live_dir . '/chain.pem',
-                        'cert'      => $live_dir . '/cert.pem',
-                ];
-
-                $issued_at = $expires_at = null;
-                if ( file_exists( $paths['cert'] ) ) {
-                        $cert_data = openssl_x509_parse( file_get_contents( $paths['cert'] ) );
-                        if ( $cert_data ) {
-                                $issued_at  = gmdate( 'c', $cert_data['validFrom_time_t'] );
-                                $expires_at = gmdate( 'c', $cert_data['validTo_time_t'] );
-                        }
+                if ( ! Renewal_Service::write_manifest( $domains, $cert_name ) ) {
+                        WP_CLI::error( 'Failed to write manifest.' );
                 }
 
-                $manifest = [
-                        'cert_name'  => $cert_name,
-                        'domains'    => array_values( $domains ),
-                        'issued_at'  => $issued_at,
-                        'expires_at' => $expires_at,
-                        'paths'      => $paths,
-                ];
-
-                file_put_contents( rtrim( $state_root, '/\\' ) . '/manifest.json', wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+                if ( ! Renewal_Service::deploy_to_apache( $cert_name ) ) {
+                        WP_CLI::error( 'Deployment failed.' );
+                }
 
                 WP_CLI::success( 'Certificate stored.' );
         }
