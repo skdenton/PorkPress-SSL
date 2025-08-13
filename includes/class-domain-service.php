@@ -341,6 +341,11 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
      * @param string $domain  Domain name.
      */
     protected function queue_wildcard_aware_issuance( int $site_id, string $domain ): void {
+        // Skip issuance for internal network subdomains unless explicitly marked external.
+        if ( $this->is_internal_subdomain( $site_id, $domain ) ) {
+            return;
+        }
+
         if ( function_exists( 'get_site_option' ) && defined( 'DOMAIN_CURRENT_SITE' ) ) {
             if ( get_site_option( 'porkpress_ssl_network_wildcard', 0 ) ) {
                 $suffix = '.' . DOMAIN_CURRENT_SITE;
@@ -351,6 +356,44 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
             }
         }
         SSL_Service::queue_issuance( $site_id );
+    }
+
+    /**
+     * Determine whether a domain is an internal subdomain of the network.
+     *
+     * Internal subdomains are those that match the site's default domain under
+     * the network's primary domain. Sites can opt-out by setting the
+     * `porkpress_ssl_external` site meta flag.
+     */
+    public function is_internal_subdomain( int $site_id, string $domain ): bool {
+        if ( ! defined( 'DOMAIN_CURRENT_SITE' ) || ! function_exists( 'get_site' ) ) {
+            return false;
+        }
+
+        $site = get_site( $site_id );
+        if ( ! $site ) {
+            return false;
+        }
+
+        $domain   = strtolower( $domain );
+        $site_dom = strtolower( $site->domain );
+        if ( $domain !== $site_dom ) {
+            return false;
+        }
+
+        $suffix = '.' . DOMAIN_CURRENT_SITE;
+        if ( substr( $domain, -strlen( $suffix ) ) !== $suffix ) {
+            return false;
+        }
+
+        if ( function_exists( 'get_site_meta' ) ) {
+            $external = get_site_meta( $site_id, 'porkpress_ssl_external', true );
+            if ( $external ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -685,6 +728,11 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
         * Ensure a www CNAME exists.
         */
        protected function ensure_www_cname( string $domain, int $ttl ) {
+               // Only create a www CNAME for apex domains.
+               if ( substr_count( $domain, '.' ) > 1 ) {
+                       return true;
+               }
+
                if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieveByNameType' ) || ! method_exists( $this->client, 'editByNameType' ) ) {
                        return true;
                }
