@@ -89,19 +89,136 @@ class CLI extends WP_CLI_Command {
                         'porkpress_ssl_cert_name',
                         defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
                 ) );
-                $staging   = isset( $assoc_args['staging'] );
-                $this->run_certbot( $domains, $cert_name, $staging, true );
-        }
+$staging   = isset( $assoc_args['staging'] );
+$this->run_certbot( $domains, $cert_name, $staging, true );
+}
 
-        /**
-         * Invoke certbot and write manifest.
-         *
-         * @param array  $domains    Domains to include.
-         * @param string $cert_name  Certificate lineage name.
-         * @param bool   $staging    Whether to use staging environment.
-         * @param bool   $renewal    Force renewal of existing certificate.
-         */
-        protected function run_certbot( array $domains, string $cert_name, bool $staging, bool $renewal ) {
+/**
+ * Check system dependencies and environment.
+ *
+ * ## OPTIONS
+ *
+ * [--config-dir=<path>]
+ * : Certbot configuration directory. Defaults to /etc/letsencrypt.
+ *
+ * [--logs-dir=<path>]
+ * : Certbot logs directory. Defaults to /var/log/letsencrypt.
+ *
+ * [--work-dir=<path>]
+ * : Certbot work directory. Defaults to /var/lib/letsencrypt.
+ *
+ * ## EXAMPLES
+ *
+ * wp porkpress ssl:health
+ *
+ * @when after_wp_load
+ *
+ * @param array $args       Positional arguments.
+ * @param array $assoc_args Associative arguments.
+ */
+public function health( $args, $assoc_args ) {
+$config_dir = $assoc_args['config-dir'] ?? '/etc/letsencrypt';
+$logs_dir   = $assoc_args['logs-dir'] ?? '/var/log/letsencrypt';
+$work_dir   = $assoc_args['work-dir'] ?? '/var/lib/letsencrypt';
+
+$lines  = array();
+$failed = false;
+
+$which        = Runner::run( 'command -v certbot 2>/dev/null', 'certbot' );
+$certbot_path = trim( $which['output'] );
+if ( $certbot_path ) {
+$lines[] = 'certbot: OK (' . $certbot_path . ')';
+} else {
+$lines[] = 'certbot: not found';
+$failed  = true;
+}
+
+if ( is_dir( $config_dir ) && is_readable( $config_dir ) ) {
+$lines[] = 'config-dir: OK (' . $config_dir . ')';
+} else {
+$lines[] = 'config-dir: unreadable (' . $config_dir . ')';
+$failed  = true;
+}
+if ( is_dir( $logs_dir ) && is_writable( $logs_dir ) ) {
+$lines[] = 'logs-dir: OK (' . $logs_dir . ')';
+} else {
+$lines[] = 'logs-dir: not writable (' . $logs_dir . ')';
+$failed  = true;
+}
+if ( is_dir( $work_dir ) && is_writable( $work_dir ) ) {
+$lines[] = 'work-dir: OK (' . $work_dir . ')';
+} else {
+$lines[] = 'work-dir: not writable (' . $work_dir . ')';
+$failed  = true;
+}
+
+if ( $certbot_path ) {
+$cmd = 'certbot certificates';
+if ( $config_dir ) {
+$cmd .= ' --config-dir ' . escapeshellarg( $config_dir );
+}
+if ( $work_dir ) {
+$cmd .= ' --work-dir ' . escapeshellarg( $work_dir );
+}
+if ( $logs_dir ) {
+$cmd .= ' --logs-dir ' . escapeshellarg( $logs_dir );
+}
+$result = Runner::run( $cmd . ' 2>/dev/null', 'certbot' );
+$parsed = array();
+if ( 0 === $result['code'] ) {
+$parsed = Certbot_Helper::parse_certificates_output( $result['output'] );
+}
+if ( $parsed ) {
+$parts = array();
+foreach ( $parsed as $name => $info ) {
+$parts[] = $name . ' (' . implode( ', ', $info['domains'] ) . ')';
+}
+$lines[] = 'lineages: ' . implode( '; ', $parts );
+} else {
+$lines[] = 'lineages: none';
+}
+} else {
+$lines[] = 'lineages: certbot unavailable';
+}
+
+$apache_cmd = Renewal_Service::get_apache_reload_cmd();
+$lines[]    = 'apache-reload: ' . ( $apache_cmd ? $apache_cmd : 'not detected' );
+
+$dig = trim( Runner::run( 'command -v dig 2>/dev/null' )['output'] );
+if ( $dig ) {
+$lines[] = 'dig: OK (' . $dig . ')';
+} else {
+$lines[] = 'dig: not found';
+$failed  = true;
+}
+
+if ( function_exists( 'dns_get_record' ) ) {
+$lines[] = 'dns extension: available';
+} else {
+$lines[] = 'dns extension: missing';
+$failed  = true;
+}
+
+foreach ( $lines as $line ) {
+WP_CLI::log( $line );
+}
+
+if ( $failed ) {
+WP_CLI::error( 'Health check failed.' );
+}
+
+WP_CLI::success( 'All checks passed.' );
+}
+
+/**
+ * Invoke certbot and write manifest.
+ *
+ * @param array  $domains    Domains to include.
+ * @param string $cert_name  Certificate lineage name.
+ * @param bool   $staging    Whether to use staging environment.
+ * @param bool   $renewal    Force renewal of existing certificate.
+ */
+protected function run_certbot( array $domains, string $cert_name, bool $staging, bool $renewal ) {
                 $cert_root  = get_site_option(
                         'porkpress_ssl_cert_root',
                         defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
