@@ -85,11 +85,11 @@ function porkpress_ssl_activate() {
                 }
         }
 
-        // Optionally check for apache2ctl.
-        $apache = trim( shell_exec( 'command -v apache2ctl 2>/dev/null' ) );
-        if ( '' === $apache ) {
-                $warnings[] = __( 'apache2ctl not found; automatic Apache reloads may fail.', 'porkpress-ssl' );
-                \PorkPress\SSL\Logger::warn( 'activation_check', array( 'check' => 'apache2ctl' ), 'missing' );
+        // Detect Apache reload command.
+        $apache_cmd = \PorkPress\SSL\Renewal_Service::get_apache_reload_cmd();
+        if ( '' === $apache_cmd ) {
+                $warnings[] = __( 'No Apache reload command detected; automatic Apache reloads may fail.', 'porkpress-ssl' );
+                \PorkPress\SSL\Logger::warn( 'activation_check', array( 'check' => 'apache_reload_cmd' ), 'missing' );
         }
 
         if ( $errors ) {

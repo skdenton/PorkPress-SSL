@@ -35,6 +35,9 @@ private const BASE_DELAY = 3600; // 1 hour.
  */
 public static $runner = null;
 
+    /** Last reload command result. */
+    public static $last_reload = array( 'code' => 0, 'output' => '' );
+
 /**
  * Maybe schedule the renewal cron event based on certificate expiry.
  *
@@ -124,17 +127,59 @@ $result = self::execute( $cmd );
  * @return array{code:int,output:string}
  */
 protected static function execute( string $cmd ): array {
-if ( is_callable( self::$runner ) ) {
-return call_user_func( self::$runner, $cmd );
+    if ( is_callable( self::$runner ) ) {
+        return call_user_func( self::$runner, $cmd );
+    }
+    $output = array();
+    $code   = 0;
+    exec( $cmd . ' 2>&1', $output, $code );
+    return array(
+        'code'   => $code,
+        'output' => implode( "\n", $output ),
+    );
 }
-$output = array();
-$code   = 0;
-exec( $cmd . ' 2>&1', $output, $code );
-return array(
-'code'   => $code,
-'output' => implode( "\n", $output ),
-);
-}
+
+    /**
+     * Retrieve the configured Apache reload command or detect one.
+     */
+    public static function get_apache_reload_cmd(): string {
+        $cmd = get_site_option( 'porkpress_ssl_apache_reload_cmd', '' );
+        if ( '' === $cmd || 'apachectl -k reload' === $cmd ) {
+            $detected = self::detect_apache_reload_cmd();
+            if ( $detected ) {
+                $cmd = $detected;
+                update_site_option( 'porkpress_ssl_apache_reload_cmd', $cmd );
+            }
+        }
+        return $cmd;
+    }
+
+    /**
+     * Detect the best available Apache reload command.
+     */
+    protected static function detect_apache_reload_cmd(): string {
+        if ( file_exists( '/etc/debian_version' ) && self::command_exists( 'systemctl' ) ) {
+            return 'systemctl reload apache2';
+        }
+        if ( self::command_exists( 'apache2ctl' ) ) {
+            return 'apache2ctl -k graceful';
+        }
+        if ( self::command_exists( 'service' ) ) {
+            return 'service apache2 reload';
+        }
+        if ( self::command_exists( 'apachectl' ) ) {
+            return 'apachectl -k graceful';
+        }
+        return '';
+    }
+
+    /**
+     * Check if a command exists in PATH.
+     */
+    protected static function command_exists( string $cmd ): bool {
+        $path = trim( shell_exec( 'command -v ' . escapeshellarg( $cmd ) . ' 2>/dev/null' ) );
+        return '' !== $path;
+    }
 
 /**
  * Build the certbot command.
@@ -312,26 +357,40 @@ $manifest = array(
 
         update_site_option( 'porkpress_ssl_apache_snippets', $snippets );
 
-        $cmd    = get_site_option( 'porkpress_ssl_apache_reload_cmd', 'apachectl -k reload' );
-        $result = self::execute( $cmd );
-        if ( 0 !== $result['code'] ) {
-            $context = array(
-                'cmd'    => $cmd,
-                'code'   => $result['code'],
-                'output' => $result['output'],
-            );
-            if ( preg_match( '/permission/i', $result['output'] ) ) {
-                Logger::error( 'apache_reload', $context, 'permission denied' );
-            } else {
-                Logger::error( 'apache_reload', $context, 'failed' );
-            }
+        $cmd = self::get_apache_reload_cmd();
+        if ( '' === $cmd ) {
+            self::$last_reload = array( 'code' => 127, 'output' => '' );
+            Logger::error( 'apache_reload', array( 'cmd' => '' ), 'not_found' );
             $ok = false;
         } else {
-            Logger::info( 'apache_reload', array( 'cmd' => $cmd ), 'success' );
+            $result = self::execute( $cmd );
+            self::$last_reload = $result;
+            if ( 0 !== $result['code'] ) {
+                $context = array(
+                    'cmd'    => $cmd,
+                    'code'   => $result['code'],
+                    'output' => $result['output'],
+                );
+                if ( preg_match( '/permission/i', $result['output'] ) ) {
+                    Logger::error( 'apache_reload', $context, 'permission denied' );
+                } else {
+                    Logger::error( 'apache_reload', $context, 'failed' );
+                }
+                $ok = false;
+            } else {
+                Logger::info( 'apache_reload', array( 'cmd' => $cmd ), 'success' );
+            }
         }
 
         if ( ! $ok ) {
-            \PorkPress\SSL\Notifier::notify( 'error', __( 'SSL deploy failed', 'porkpress-ssl' ), __( 'Apache reload or file copy failed during certificate deployment.', 'porkpress-ssl' ) );
+            $msg = '';
+            if ( self::$last_reload['output'] ) {
+                $clean = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( self::$last_reload['output'] ) : trim( strip_tags( self::$last_reload['output'] ) );
+                $msg   = sprintf( __( 'Apache reload failed: %s', 'porkpress-ssl' ), $clean );
+            } else {
+                $msg = __( 'Apache reload or file copy failed during certificate deployment.', 'porkpress-ssl' );
+            }
+            \PorkPress\SSL\Notifier::notify( 'error', __( 'SSL deploy failed', 'porkpress-ssl' ), $msg );
         }
 
         return $ok;

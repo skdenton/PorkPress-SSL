@@ -139,7 +139,8 @@ class CLI extends WP_CLI_Command {
                 }
 
                 if ( ! Renewal_Service::deploy_to_apache( $cert_name ) ) {
-                        WP_CLI::error( 'Deployment failed.' );
+                        $err = Renewal_Service::$last_reload['output'] ?? '';
+                        WP_CLI::error( 'Deployment failed: ' . $err );
                 }
 
                 WP_CLI::success( 'Certificate stored.' );
