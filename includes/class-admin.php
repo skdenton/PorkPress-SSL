@@ -730,6 +730,8 @@ $network_wildcard = (bool) get_site_option( 'porkpress_ssl_network_wildcard', 0 
                     'renew_window'       => $renew_window,
                     'txt_timeout'        => $txt_timeout,
                     'txt_interval'       => $txt_interval,
+                    'ipv4_override'      => $ipv4_override,
+                    'ipv6_override'      => $ipv6_override,
                     'auto_reconcile'     => (bool) $auto_reconcile,
                     'dry_run'            => (bool) $dry_run,
                     'network_wildcard'   => (bool) $network_wildcard,
@@ -756,6 +758,8 @@ $staging    = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 $renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
 $txt_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) ) );
 $txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) ) );
+$ipv4_override = get_site_option( 'porkpress_ssl_ipv4_override', '' );
+$ipv6_override = get_site_option( 'porkpress_ssl_ipv6_override', '' );
 $cert_name = $cert_name_locked ? PORKPRESS_CERT_NAME : get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = $cert_root_locked ? PORKPRESS_CERT_ROOT : get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
 $state_root = $state_root_locked ? PORKPRESS_STATE_ROOT : get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
@@ -841,6 +845,14 @@ echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_txt_interval">' . esc_html__( 'TXT Record Wait Interval (seconds)', 'porkpress-ssl' ) . '</label></th>';
 echo '<td><input name="porkpress_txt_interval" type="number" id="porkpress_txt_interval" value="' . esc_attr( $txt_interval ) . '" class="small-text" /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_ipv4">' . esc_html__( 'Network IPv4 Override', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_ipv4" type="text" id="porkpress_ipv4" value="' . esc_attr( $ipv4_override ) . '" class="regular-text" /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_ipv6">' . esc_html__( 'Network IPv6 Override', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_ipv6" type="text" id="porkpress_ipv6" value="' . esc_attr( $ipv6_override ) . '" class="regular-text" /></td>';
 echo '</tr>';
 echo '<tr>';
         echo '<th scope="row">' . esc_html__( 'Automatic Reconciliation', 'porkpress-ssl' ) . '</th>';

@@ -63,12 +63,19 @@ function porkpress_ssl_activate() {
         $errors   = array();
         $warnings = array();
 
-        // Verify certbot command.
-        $certbot = trim( shell_exec( 'command -v certbot 2>/dev/null' ) );
-        if ( '' === $certbot ) {
-                $errors[] = __( 'Certbot is required but could not be found.', 'porkpress-ssl' );
-                \PorkPress\SSL\Logger::error( 'activation_check', array( 'check' => 'certbot' ), 'missing' );
-        }
+       // Verify certbot command.
+       $certbot = trim( shell_exec( 'command -v certbot 2>/dev/null' ) );
+       if ( '' === $certbot ) {
+               $errors[] = __( 'Certbot is required but could not be found.', 'porkpress-ssl' );
+               \PorkPress\SSL\Logger::error( 'activation_check', array( 'check' => 'certbot' ), 'missing' );
+       }
+
+       // Verify dig command.
+       $dig = trim( shell_exec( 'command -v dig 2>/dev/null' ) );
+       if ( '' === $dig ) {
+               $errors[] = __( 'dig is required but could not be found.', 'porkpress-ssl' );
+               \PorkPress\SSL\Logger::error( 'activation_check', array( 'check' => 'dig' ), 'missing' );
+       }
 
         // Ensure required directories are writable.
         foreach ( array( PORKPRESS_CERT_ROOT, PORKPRESS_STATE_ROOT ) as $dir ) {
