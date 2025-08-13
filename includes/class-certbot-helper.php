@@ -54,4 +54,47 @@ class Certbot_Helper {
         }
         return $cmd;
     }
+
+    /**
+     * List existing certbot certificate lineages.
+     *
+     * Invokes `certbot certificates` and parses the output into an associative
+     * array keyed by lineage name. Each entry contains a `domains` array of
+     * SANs present in that certificate.
+     *
+     * @return array<string, array{domains: array<int, string>}>
+     */
+    public static function list_certificates(): array {
+        $output = shell_exec( 'certbot certificates 2>/dev/null' );
+        if ( ! is_string( $output ) || '' === trim( $output ) ) {
+            return array();
+        }
+
+        return self::parse_certificates_output( $output );
+    }
+
+    /**
+     * Parse `certbot certificates` output.
+     *
+     * @param string $output Raw output from certbot.
+     * @return array<string, array{domains: array<int, string>}>
+     */
+    public static function parse_certificates_output( string $output ): array {
+        $certs   = array();
+        $current = null;
+        foreach ( preg_split( '/\r?\n/', $output ) as $line ) {
+            $line = trim( $line );
+            if ( preg_match( '/^Certificate Name:\s*(\S+)/', $line, $m ) ) {
+                $current             = $m[1];
+                $certs[ $current ] = array( 'domains' => array() );
+                continue;
+            }
+            if ( $current && preg_match( '/^Domains:\s*(.+)$/', $line, $m ) ) {
+                $domains                       = preg_split( '/\s+/', trim( $m[1] ) );
+                $certs[ $current ]['domains'] = is_array( $domains ) ? $domains : array();
+            }
+        }
+
+        return $certs;
+    }
 }
