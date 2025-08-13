@@ -41,6 +41,8 @@ private const DOMAIN_LIST_CACHE_KEY = 'porkpress_ssl_domain_list';
 private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
 private const DOMAIN_LIST_MAX_PAGES = 100;
 
+private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
+
        /**
         * Constructor.
         *
@@ -108,10 +110,6 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
         * @return true|\WP_Error True if healthy, error on mismatch or lookup failure.
         */
        public function check_dns_health( string $domain ) {
-               if ( ! function_exists( 'dns_get_record' ) ) {
-                       return true;
-               }
-
                $home = '';
                if ( function_exists( 'network_home_url' ) ) {
                        $home = network_home_url();
@@ -146,7 +144,7 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                if ( empty( $expected_ipv4 ) && function_exists( 'gethostbynamel' ) ) {
                        $expected_ipv4 = (array) gethostbynamel( $expected_host );
                }
-               if ( empty( $expected_ipv6 ) && function_exists( 'dns_get_record' ) ) {
+               if ( empty( $expected_ipv6 ) && $this->has_dns_get_record() ) {
                        $ipv6_records = dns_get_record( $expected_host, DNS_AAAA );
                        if ( is_array( $ipv6_records ) ) {
                                foreach ( $ipv6_records as $r ) {
@@ -157,9 +155,10 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                        }
                }
 
-               $records = dns_get_record( $domain, DNS_A | DNS_AAAA | DNS_CNAME );
-               if ( false === $records || ! is_array( $records ) || empty( $records ) ) {
-                       return new \WP_Error( 'dns_lookup_failed', __( 'DNS lookup failed or returned no records.', 'porkpress-ssl' ) );
+               $degraded = false;
+               $records  = $this->fetch_dns_records( $domain, $degraded );
+               if ( empty( $records ) ) {
+                       return $degraded ? true : new \WP_Error( 'dns_lookup_failed', __( 'DNS lookup failed or returned no records.', 'porkpress-ssl' ) );
                }
 
                $found_a      = array();
@@ -192,18 +191,125 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                }
 
                if ( empty( $found_a ) ) {
+                       $this->record_dns_propagation_issue( $domain, $found_a, $expected_ipv4, $found_aaaa, $expected_ipv6 );
                        return new \WP_Error( 'dns_missing_a_record', sprintf( __( 'Domain %s has no A record.', 'porkpress-ssl' ), $domain ) );
                }
 
                if ( $expected_ipv4 && empty( array_intersect( $found_a, $expected_ipv4 ) ) ) {
+                       $this->record_dns_propagation_issue( $domain, $found_a, $expected_ipv4, $found_aaaa, $expected_ipv6 );
                        return new \WP_Error( 'dns_mismatch', sprintf( __( 'Domain %s does not point to expected IPv4 address.', 'porkpress-ssl' ), $domain ) );
                }
 
                if ( $expected_ipv6 && $found_aaaa && empty( array_intersect( $found_aaaa, $expected_ipv6 ) ) ) {
+                       $this->record_dns_propagation_issue( $domain, $found_a, $expected_ipv4, $found_aaaa, $expected_ipv6 );
                        return new \WP_Error( 'dns_mismatch', sprintf( __( 'Domain %s does not point to expected IPv6 address.', 'porkpress-ssl' ), $domain ) );
                }
 
+               $this->clear_dns_propagation_issue( $domain );
+
                return true;
+       }
+
+       protected function has_dns_get_record(): bool {
+               return function_exists( 'dns_get_record' );
+       }
+
+       protected function fetch_dns_records( string $domain, bool &$degraded = false ): array {
+               if ( $this->has_dns_get_record() ) {
+                       $records = dns_get_record( $domain, DNS_A | DNS_AAAA | DNS_CNAME );
+                       return is_array( $records ) ? $records : array();
+               }
+
+               $records = $this->dig_dns_records( $domain );
+               if ( empty( $records ) ) {
+                       $degraded = true;
+               }
+               return $records;
+       }
+
+       protected function dig_dns_records( string $domain ): array {
+               $ns_result = $this->client->getNs( $domain );
+               $nameservers = array();
+               if ( is_array( $ns_result ) && isset( $ns_result['ns'] ) && is_array( $ns_result['ns'] ) ) {
+                       $nameservers = $ns_result['ns'];
+               }
+               if ( empty( $nameservers ) ) {
+                       return array();
+               }
+
+               $lookup = function ( string $type ) use ( $domain, $nameservers ): array {
+                       $results = array();
+                       $d = escapeshellarg( $domain );
+                       foreach ( $nameservers as $ns ) {
+                               $ns_esc = escapeshellarg( $ns );
+                               $cmd    = sprintf( 'dig +short %s %s @%s', $d, $type, $ns_esc );
+                               $output = @shell_exec( $cmd );
+                               if ( $output ) {
+                                       $lines = preg_split( '/\s+/', trim( $output ) );
+                                       foreach ( $lines as $line ) {
+                                               if ( '' !== $line ) {
+                                                       $results[] = rtrim( $line, '.' );
+                                               }
+                                       }
+                               }
+                       }
+                       return array_unique( $results );
+               };
+
+               $records = array();
+               foreach ( $lookup( 'A' ) as $ip ) {
+                       $records[] = array( 'type' => 'A', 'ip' => $ip );
+               }
+               foreach ( $lookup( 'AAAA' ) as $ip ) {
+                       $records[] = array( 'type' => 'AAAA', 'ipv6' => $ip );
+               }
+               foreach ( $lookup( 'CNAME' ) as $target ) {
+                       $records[] = array( 'type' => 'CNAME', 'target' => $target );
+               }
+
+               return $records;
+       }
+
+       protected function record_dns_propagation_issue( string $domain, array $found_a, array $expected_ipv4, array $found_aaaa, array $expected_ipv6 ): void {
+               Logger::warn( 'dns_propagation_pending', array(
+                       'domain'        => $domain,
+                       'found_a'       => $found_a,
+                       'expected_ipv4' => $expected_ipv4,
+                       'found_aaaa'    => $found_aaaa,
+                       'expected_ipv6' => $expected_ipv6,
+               ) );
+
+               if ( ! function_exists( 'get_site_option' ) || ! function_exists( 'update_site_option' ) ) {
+                       return;
+               }
+
+               $failures = get_site_option( self::DNS_PROPAGATION_OPTION, array() );
+               $now      = time();
+               $timeout  = (int) get_site_option( 'porkpress_ssl_dns_timeout', 900 );
+
+               if ( ! isset( $failures[ $domain ] ) ) {
+                       $failures[ $domain ] = $now;
+                       update_site_option( self::DNS_PROPAGATION_OPTION, $failures );
+                       return;
+               }
+
+               if ( $now - (int) $failures[ $domain ] > $timeout ) {
+                       Notifier::notify( 'warning', __( 'DNS propagation delay', 'porkpress-ssl' ), sprintf( __( 'Domain %s DNS records have not propagated after %d seconds.', 'porkpress-ssl' ), $domain, $timeout ) );
+                       $failures[ $domain ] = $now;
+               }
+
+               update_site_option( self::DNS_PROPAGATION_OPTION, $failures );
+       }
+
+       protected function clear_dns_propagation_issue( string $domain ): void {
+               if ( ! function_exists( 'get_site_option' ) || ! function_exists( 'update_site_option' ) ) {
+                       return;
+               }
+               $failures = get_site_option( self::DNS_PROPAGATION_OPTION, array() );
+               if ( isset( $failures[ $domain ] ) ) {
+                       unset( $failures[ $domain ] );
+                       update_site_option( self::DNS_PROPAGATION_OPTION, $failures );
+               }
        }
 
         /**

@@ -540,9 +540,77 @@ class DomainServiceTest extends TestCase {
         );
     }
 
+    public function testCheckDnsHealthOkWithMultipleExpectedIps() {
+        global $dns_records;
+        $dns_records = array(
+            'domain.test' => array(
+                array( 'type' => 'A', 'ip' => '2.2.2.2' ),
+            ),
+        );
+        update_site_option( 'porkpress_ssl_ipv4_override', '1.1.1.1 2.2.2.2' );
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() { $this->missing_credentials = false; }
+        };
+
+        $result = $service->check_dns_health( 'domain.test' );
+        $this->assertTrue( $result );
+
+        update_site_option( 'porkpress_ssl_ipv4_override', '' );
+    }
+
+    public function testCheckDnsHealthUsesDigFallbackWhenDnsGetRecordMissing() {
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() { $this->missing_credentials = false; }
+            protected function has_dns_get_record(): bool { return false; }
+            protected function dig_dns_records( string $domain ): array {
+                return array( array( 'type' => 'A', 'ip' => '1.1.1.1' ) );
+            }
+        };
+
+        $result = $service->check_dns_health( 'domain.test' );
+        $this->assertTrue( $result );
+    }
+
+    public function testDnsPropagationNoticeAfterTimeout() {
+        global $dns_records, $wpdb;
+        $wpdb = new \MockWpdb();
+        $dns_records = array(
+            'domain.test' => array(
+                array( 'type' => 'A', 'ip' => '2.2.2.2' ),
+            ),
+        );
+        update_site_option( 'porkpress_ssl_ipv4_override', '1.1.1.1' );
+        update_site_option( 'porkpress_ssl_dns_timeout', 1 );
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() { $this->missing_credentials = false; }
+        };
+
+        $result = $service->check_dns_health( 'domain.test' );
+        $this->assertInstanceOf( \WP_Error::class, $result );
+        $failures = get_site_option( 'porkpress_ssl_dns_propagation', array() );
+        $this->assertArrayHasKey( 'domain.test', $failures );
+
+        $failures['domain.test'] = time() - 5;
+        update_site_option( 'porkpress_ssl_dns_propagation', $failures );
+
+        $result = $service->check_dns_health( 'domain.test' );
+        $this->assertInstanceOf( \WP_Error::class, $result );
+        $notices = get_site_option( \PorkPress\SSL\Notifier::OPTION, array() );
+        $this->assertNotEmpty( $notices );
+
+        update_site_option( 'porkpress_ssl_ipv4_override', '' );
+        update_site_option( 'porkpress_ssl_dns_timeout', 900 );
+        update_site_option( 'porkpress_ssl_dns_propagation', array() );
+        update_site_option( \PorkPress\SSL\Notifier::OPTION, array() );
+    }
+
     protected function tearDown(): void {
         unset( $GLOBALS['porkpress_skip_dns_check'] );
         $GLOBALS['dns_records'] = array();
+        update_site_option( \PorkPress\SSL\Notifier::OPTION, array() );
+        update_site_option( 'porkpress_ssl_dns_propagation', array() );
     }
 }
 
