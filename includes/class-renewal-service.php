@@ -233,39 +233,84 @@ $manifest = array(
             'porkpress_ssl_cert_root',
             defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
         );
-        $live_dir  = rtrim( $cert_root, '/\\' ) . '/live/' . $cert_name;
-        $source    = array(
-            'fullchain' => $live_dir . '/fullchain.pem',
-            'privkey'   => $live_dir . '/privkey.pem',
-        );
+        $live_dir   = rtrim( $cert_root, '/\\' ) . '/live/' . $cert_name;
+        $fullchain  = $live_dir . '/fullchain.pem';
+        $privkey    = $live_dir . '/privkey.pem';
+        $directives = "SSLCertificateFile {$fullchain}\nSSLCertificateKeyFile {$privkey}";
 
-        $ok    = true;
-        $confs = glob( '/etc/apache2/sites-available/*.conf' ) ?: array();
-        foreach ( $confs as $conf ) {
-            $dest_dir = preg_replace( '/\.conf$/', '', $conf );
-            if ( ! is_dir( $dest_dir ) && ! wp_mkdir_p( $dest_dir ) ) {
-                Logger::error( 'apache_deploy', array( 'dir' => $dest_dir ), 'mkdir failed' );
+        $snippets      = array();
+        $enabled_paths = array();
+        $ok            = true;
+
+        $links = glob( '/etc/apache2/sites-enabled/*.conf' ) ?: array();
+        foreach ( $links as $link ) {
+            $target = realpath( $link );
+            if ( false === $target ) {
+                continue;
+            }
+            $enabled_paths[ $target ] = true;
+
+            $contents = @file_get_contents( $target );
+            if ( false === $contents ) {
+                $snippets[ $target ] = array(
+                    'enabled' => true,
+                    'reason'  => 'unreadable',
+                    'snippet' => $directives,
+                );
                 $ok = false;
                 continue;
             }
-            foreach ( $source as $name => $src ) {
-                $dest = $dest_dir . '/' . $name . '.pem';
-                if ( file_exists( $dest ) ) {
-                    @unlink( $dest );
-                }
-                if ( ! @symlink( $src, $dest ) ) {
-                    if ( ! @copy( $src, $dest ) ) {
-                        $err = error_get_last();
-                        Logger::error(
-                            'apache_deploy',
-                            array( 'src' => $src, 'dest' => $dest, 'error' => $err['message'] ?? '' ),
-                            'copy failed'
-                        );
-                        $ok = false;
+
+            $modified = false;
+            $patterns = array(
+                'SSLCertificateFile'     => $fullchain,
+                'SSLCertificateKeyFile'  => $privkey,
+            );
+
+            foreach ( $patterns as $directive => $desired ) {
+                $regex = '/^\s*' . $directive . '\s+(\S+)/mi';
+                if ( preg_match( $regex, $contents, $m ) ) {
+                    if ( $m[1] !== $desired ) {
+                        $contents = preg_replace( $regex, $directive . ' ' . $desired, $contents, 1 );
+                        $modified = true;
                     }
+                } else {
+                    $contents .= "\n{$directive} {$desired}\n";
+                    $modified = true;
+                }
+            }
+
+            if ( $modified ) {
+                if ( is_writable( $target ) && false !== @file_put_contents( $target, $contents ) ) {
+                    // success
+                } else {
+                    $snippets[ $target ] = array(
+                        'enabled' => true,
+                        'reason'  => 'unwritable',
+                        'snippet' => $directives,
+                    );
+                    Logger::warn( 'apache_deploy', array( 'vhost' => $target ), 'unwritable' );
+                    $ok = false;
                 }
             }
         }
+
+        // Detect disabled vhosts.
+        $available = glob( '/etc/apache2/sites-available/*.conf' ) ?: array();
+        foreach ( $available as $conf ) {
+            if ( isset( $enabled_paths[ $conf ] ) ) {
+                continue;
+            }
+            $snippets[ $conf ] = array(
+                'enabled' => false,
+                'reason'  => 'disabled',
+                'snippet' => $directives,
+            );
+            Logger::warn( 'apache_deploy', array( 'vhost' => $conf ), 'disabled' );
+            $ok = false;
+        }
+
+        update_site_option( 'porkpress_ssl_apache_snippets', $snippets );
 
         $cmd    = get_site_option( 'porkpress_ssl_apache_reload_cmd', 'apachectl -k reload' );
         $result = self::execute( $cmd );

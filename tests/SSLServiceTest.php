@@ -111,10 +111,11 @@ class SSLServiceTest extends TestCase {
         file_put_contents( PORKPRESS_CERT_ROOT . '/live/porkpress-network/cert.pem', 'cert' );
 
         @mkdir('/etc/apache2/sites-available', 0777, true);
-        @unlink('/etc/apache2/sites-available/porkpress-network/fullchain.pem');
-        @unlink('/etc/apache2/sites-available/porkpress-network/privkey.pem');
-        @rmdir('/etc/apache2/sites-available/porkpress-network');
-        file_put_contents('/etc/apache2/sites-available/porkpress-network.conf', '');
+        @mkdir('/etc/apache2/sites-enabled', 0777, true);
+        foreach ( glob('/etc/apache2/sites-available/*.conf') as $f ) { @unlink( $f ); }
+        foreach ( glob('/etc/apache2/sites-enabled/*.conf') as $f ) { @unlink( $f ); }
+        file_put_contents('/etc/apache2/sites-available/porkpress-network.conf', "SSLCertificateFile /old/fullchain.pem\nSSLCertificateKeyFile /old/privkey.pem\n");
+        symlink('/etc/apache2/sites-available/porkpress-network.conf', '/etc/apache2/sites-enabled/porkpress-network.conf');
     }
 
     public function testQueueAndRun() {
