@@ -63,10 +63,11 @@ class RenewalServiceTest extends TestCase {
         file_put_contents($cert_root . '/live/test/cert.pem', 'cert');
 
         @mkdir('/etc/apache2/sites-available', 0777, true);
-        @unlink('/etc/apache2/sites-available/test/fullchain.pem');
-        @unlink('/etc/apache2/sites-available/test/privkey.pem');
-        @rmdir('/etc/apache2/sites-available/test');
-        file_put_contents('/etc/apache2/sites-available/test.conf', '');
+        @mkdir('/etc/apache2/sites-enabled', 0777, true);
+        foreach ( glob('/etc/apache2/sites-available/*.conf') as $f ) { @unlink( $f ); }
+        foreach ( glob('/etc/apache2/sites-enabled/*.conf') as $f ) { @unlink( $f ); }
+        file_put_contents('/etc/apache2/sites-available/test.conf', "SSLCertificateFile /old/fullchain.pem\nSSLCertificateKeyFile /old/privkey.pem\n");
+        symlink('/etc/apache2/sites-available/test.conf', '/etc/apache2/sites-enabled/test.conf');
     }
 
     public function testSchedulesBasedOnExpiry() {
@@ -103,15 +104,15 @@ class RenewalServiceTest extends TestCase {
         $this->assertStringNotContainsString("-d 'sub.example.com'", $cmd);
     }
 
-    public function testReloadsApacheAndCopiesFiles() {
+    public function testReloadsApacheAndUpdatesVhosts() {
         update_site_option('porkpress_ssl_apache_reload', 1);
         update_site_option('porkpress_ssl_apache_reload_cmd', 'reloadcmd');
         $commands = [];
         \PorkPress\SSL\Renewal_Service::$runner = function($cmd) use (&$commands){ $commands[] = $cmd; return ['code'=>0,'output'=>'']; };
         \PorkPress\SSL\Renewal_Service::run();
         $this->assertContains('reloadcmd', $commands);
-        $this->assertFileExists('/etc/apache2/sites-available/test/fullchain.pem');
-        $this->assertFileExists('/etc/apache2/sites-available/test/privkey.pem');
+        $contents = file_get_contents('/etc/apache2/sites-available/test.conf');
+        $this->assertStringContainsString(PORKPRESS_CERT_ROOT . '/live/test/fullchain.pem', $contents);
     }
 
     public function testNoReloadWhenDisabled() {
@@ -120,6 +121,7 @@ class RenewalServiceTest extends TestCase {
         \PorkPress\SSL\Renewal_Service::$runner = function($cmd) use (&$commands){ $commands[] = $cmd; return ['code'=>0,'output'=>'']; };
         \PorkPress\SSL\Renewal_Service::run();
         $this->assertCount(1, $commands);
-        $this->assertFileDoesNotExist('/etc/apache2/sites-available/test/fullchain.pem');
+        $contents = file_get_contents('/etc/apache2/sites-available/test.conf');
+        $this->assertStringNotContainsString(PORKPRESS_CERT_ROOT . '/live/test/fullchain.pem', $contents);
     }
 }

@@ -212,7 +212,23 @@ class Admin {
                        }
                        echo '</ul></div>';
                }
-        }
+
+               $remediations = get_site_option( 'porkpress_ssl_apache_snippets', array() );
+               if ( $remediations ) {
+                       echo '<div class="notice notice-warning"><p>' . esc_html__( 'Apache vhosts need manual SSL directive updates:', 'porkpress-ssl' ) . '</p><ul>';
+                       foreach ( $remediations as $file => $info ) {
+                               $reason = $info['reason'] ?? '';
+                               if ( 'disabled' === $reason ) {
+                                       $reason = __( 'disabled', 'porkpress-ssl' );
+                               } elseif ( 'unwritable' === $reason ) {
+                                       $reason = __( 'unwritable', 'porkpress-ssl' );
+                               }
+                               $label = $file . ( $reason ? ' (' . $reason . ')' : '' );
+                               echo '<li><strong>' . esc_html( $label ) . '</strong><pre>' . esc_html( $info['snippet'] ) . '</pre></li>';
+                       }
+                       echo '</ul></div>';
+               }
+       }
 
        /**
         * Render the sites tab for the network admin page.
