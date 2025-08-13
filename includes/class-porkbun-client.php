@@ -130,11 +130,41 @@ class Porkbun_Client {
                 ] );
         }
 
-	/**
-	 * Delete a record by ID.
-	 */
-	public function deleteRecord( string $domain, int $record_id ) {
-		return $this->request( "dns/delete/{$domain}/{$record_id}", [] );
+       /**
+        * Retrieve DNS records by name and type.
+        */
+       public function retrieveByNameType( string $domain, string $name, string $type ) {
+               return $this->request( "dns/retrieveByNameType/{$domain}", [
+                       'name' => $name,
+                       'type' => $type,
+               ] );
+       }
+
+       /**
+        * Edit or create a DNS record by name and type.
+        */
+       public function editByNameType( string $domain, string $name, string $type, string $content, int $ttl = 300 ) {
+               return $this->request( "dns/editByNameType/{$domain}", [
+                       'name'    => $name,
+                       'type'    => $type,
+                       'content' => $content,
+                       'ttl'     => $ttl,
+               ] );
+       }
+
+       /**
+        * Retrieve authoritative nameservers for a domain.
+        */
+       public function getNs( string $domain ) {
+               $domain = strtolower( $domain );
+               return $this->request( "domain/getNs/{$domain}", [] );
+       }
+
+        /**
+         * Delete a record by ID.
+         */
+        public function deleteRecord( string $domain, int $record_id ) {
+                return $this->request( "dns/delete/{$domain}/{$record_id}", [] );
 	}
 
 	/**

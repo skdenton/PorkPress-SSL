@@ -130,9 +130,23 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                        return true;
                }
 
-               $expected_ipv4 = function_exists( 'gethostbynamel' ) ? (array) gethostbynamel( $expected_host ) : array();
+               $expected_ipv4 = array();
                $expected_ipv6 = array();
-               if ( function_exists( 'dns_get_record' ) ) {
+               if ( function_exists( 'get_site_option' ) ) {
+                       $v4 = trim( (string) get_site_option( 'porkpress_ssl_ipv4_override', '' ) );
+                       if ( '' !== $v4 ) {
+                               $expected_ipv4 = array_filter( preg_split( '/[,\s]+/', $v4 ) );
+                       }
+                       $v6 = trim( (string) get_site_option( 'porkpress_ssl_ipv6_override', '' ) );
+                       if ( '' !== $v6 ) {
+                               $expected_ipv6 = array_filter( preg_split( '/[,\s]+/', $v6 ) );
+                       }
+               }
+
+               if ( empty( $expected_ipv4 ) && function_exists( 'gethostbynamel' ) ) {
+                       $expected_ipv4 = (array) gethostbynamel( $expected_host );
+               }
+               if ( empty( $expected_ipv6 ) && function_exists( 'dns_get_record' ) ) {
                        $ipv6_records = dns_get_record( $expected_host, DNS_AAAA );
                        if ( is_array( $ipv6_records ) ) {
                                foreach ( $ipv6_records as $r ) {
@@ -148,55 +162,45 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                        return new \WP_Error( 'dns_lookup_failed', __( 'DNS lookup failed or returned no records.', 'porkpress-ssl' ) );
                }
 
-               $found_a = false;
+               $found_a      = array();
+               $found_aaaa   = array();
+               $cname_target = '';
                foreach ( $records as $record ) {
                        switch ( $record['type'] ) {
                                case 'A':
-                                       $found_a = true;
-                                       if ( ! in_array( $record['ip'], $expected_ipv4, true ) ) {
-                                               return new \WP_Error(
-                                                       'dns_mismatch',
-                                                       sprintf(
-                                                               __( 'Domain %1$s points to %2$s instead of %3$s.', 'porkpress-ssl' ),
-                                                               $domain,
-                                                               $record['ip'],
-                                                               $expected_host
-                                                       )
-                                               );
-                                       }
+                                       $found_a[] = $record['ip'];
                                        break;
                                case 'AAAA':
-                                       if ( ! in_array( $record['ipv6'], $expected_ipv6, true ) ) {
-                                               return new \WP_Error(
-                                                       'dns_mismatch',
-                                                       sprintf(
-                                                               __( 'Domain %1$s points to %2$s instead of %3$s.', 'porkpress-ssl' ),
-                                                               $domain,
-                                                               $record['ipv6'],
-                                                               $expected_host
-                                                       )
-                                               );
-                                       }
+                                       $found_aaaa[] = $record['ipv6'];
                                        break;
                                case 'CNAME':
-                                       $target = rtrim( $record['target'], '.' );
-                                       if ( $target !== $expected_host ) {
-                                               return new \WP_Error(
-                                                       'dns_mismatch',
-                                                       sprintf(
-                                                               __( 'Domain %1$s CNAMEs to %2$s instead of %3$s.', 'porkpress-ssl' ),
-                                                               $domain,
-                                                               $target,
-                                                               $expected_host
-                                                       )
-                                               );
-                                       }
+                                       $cname_target = rtrim( $record['target'], '.' );
                                        break;
                        }
                }
 
-               if ( ! $found_a ) {
+               if ( $cname_target && $cname_target !== $expected_host ) {
+                       return new \WP_Error(
+                               'dns_mismatch',
+                               sprintf(
+                                       __( 'Domain %1$s CNAMEs to %2$s instead of %3$s.', 'porkpress-ssl' ),
+                                       $domain,
+                                       $cname_target,
+                                       $expected_host
+                               )
+                       );
+               }
+
+               if ( empty( $found_a ) ) {
                        return new \WP_Error( 'dns_missing_a_record', sprintf( __( 'Domain %s has no A record.', 'porkpress-ssl' ), $domain ) );
+               }
+
+               if ( $expected_ipv4 && empty( array_intersect( $found_a, $expected_ipv4 ) ) ) {
+                       return new \WP_Error( 'dns_mismatch', sprintf( __( 'Domain %s does not point to expected IPv4 address.', 'porkpress-ssl' ), $domain ) );
+               }
+
+               if ( $expected_ipv6 && $found_aaaa && empty( array_intersect( $found_aaaa, $expected_ipv6 ) ) ) {
+                       return new \WP_Error( 'dns_mismatch', sprintf( __( 'Domain %s does not point to expected IPv6 address.', 'porkpress-ssl' ), $domain ) );
                }
 
                return true;
@@ -353,18 +357,11 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                        ? apply_filters( 'porkpress_ssl_skip_dns_check', false, $domain, $site_id )
                        : false;
 
-               if ( ! $skip_check ) {
-                       $check = $this->check_dns_health( $domain );
-                       if ( $check instanceof \WP_Error ) {
-                               return $check;
-                       }
-               }
-
                if ( function_exists( 'update_site_meta' ) ) {
                        update_site_meta( $site_id, 'porkpress_domain', $domain );
                }
 
-               $ttl = $ttl ?? 300;
+               $ttl = $ttl ?? 600;
                if ( function_exists( 'apply_filters' ) ) {
                        $ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
                }
@@ -372,6 +369,13 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                $result = $this->add_alias( $site_id, $domain, true, 'active', $ttl );
                if ( $result instanceof Porkbun_Client_Error ) {
                        return $result;
+               }
+
+               if ( ! $skip_check ) {
+                       $check = $this->check_dns_health( $domain );
+                       if ( $check instanceof \WP_Error ) {
+                               return $check;
+                       }
                }
 
                return true;
@@ -479,40 +483,113 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
                }
 
                if ( $ipv4 ) {
-                       $result = $this->client->createARecord( $domain, '', $ipv4, $ttl, 'A' );
+                       $result = $this->ensure_dns_record( $domain, '', $ipv4, $ttl, 'A', $site_id );
                        if ( $result instanceof Porkbun_Client_Error ) {
-                               \PorkPress\SSL\Logger::error(
-                                       'create_a_record',
-                                       array(
-                                               'domain'  => $domain,
-                                               'site_id' => $site_id,
-                                               'ip'      => $ipv4,
-                                               'ttl'     => $ttl,
-                                       ),
-                                       $result->message
-                               );
                                return $result;
                        }
                }
 
                if ( $ipv6 ) {
-                       $result = $this->client->createARecord( $domain, '', $ipv6, $ttl, 'AAAA' );
+                       $result = $this->ensure_dns_record( $domain, '', $ipv6, $ttl, 'AAAA', $site_id );
                        if ( $result instanceof Porkbun_Client_Error ) {
-                               \PorkPress\SSL\Logger::error(
-                                       'create_a_record',
-                                       array(
-                                               'domain'  => $domain,
-                                               'site_id' => $site_id,
-                                               'ip'      => $ipv6,
-                                               'ttl'     => $ttl,
-                                       ),
-                                       $result->message
-                               );
                                return $result;
                        }
                }
 
+               $cname = $this->ensure_www_cname( $domain, $ttl );
+               if ( $cname instanceof Porkbun_Client_Error ) {
+                       return $cname;
+               }
+
                return true;
+       }
+
+       /**
+        * Ensure a DNS record exists with the desired content.
+        */
+       protected function ensure_dns_record( string $domain, string $name, string $content, int $ttl, string $type, int $site_id ) {
+               if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieveByNameType' ) || ! method_exists( $this->client, 'editByNameType' ) ) {
+                       if ( isset( $this->client ) && method_exists( $this->client, 'createARecord' ) ) {
+                               return $this->client->createARecord( $domain, $name, $content, $ttl, $type );
+                       }
+                       return true;
+               }
+
+               try {
+                       $existing = $this->client->retrieveByNameType( $domain, $name, $type );
+               } catch ( \Throwable $e ) {
+                       $existing = new Porkbun_Client_Error( 'client_error', $e->getMessage() );
+               }
+               if ( $existing instanceof Porkbun_Client_Error ) {
+                       if ( isset( $this->client ) && method_exists( $this->client, 'createARecord' ) ) {
+                               $result = $this->client->createARecord( $domain, $name, $content, $ttl, $type );
+                               if ( $result instanceof Porkbun_Client_Error ) {
+                                       \PorkPress\SSL\Logger::error(
+                                               'create_a_record',
+                                               array(
+                                                       'domain' => $domain,
+                                                       'site_id' => $site_id,
+                                                       'type' => $type,
+                                                       'name' => $name,
+                                                       'ttl' => $ttl,
+                                               ),
+                                               $result->message
+                                       );
+                               }
+                               return $result;
+                       }
+                       \PorkPress\SSL\Logger::error(
+                               'create_a_record',
+                               array(
+                                       'domain' => $domain,
+                                       'site_id' => $site_id,
+                                       'type' => $type,
+                                       'name' => $name,
+                                       'ttl' => $ttl,
+                               ),
+                               $existing->message
+                       );
+                       return $existing;
+               }
+
+               if ( is_array( $existing ) && ! empty( $existing['records'] ) ) {
+                       $result = $this->client->editByNameType( $domain, $name, $type, $content, $ttl );
+               } else {
+                       $result = $this->client->createARecord( $domain, $name, $content, $ttl, $type );
+               }
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       \PorkPress\SSL\Logger::error(
+                               'create_a_record',
+                               array(
+                                       'domain' => $domain,
+                                       'site_id' => $site_id,
+                                       'type' => $type,
+                                       'name' => $name,
+                                       'ttl' => $ttl,
+                               ),
+                               $result->message
+                       );
+                       return $result;
+               }
+
+               return true;
+       }
+
+       /**
+        * Ensure a www CNAME exists.
+        */
+       protected function ensure_www_cname( string $domain, int $ttl ) {
+               if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieveByNameType' ) || ! method_exists( $this->client, 'editByNameType' ) ) {
+                       return true;
+               }
+
+               try {
+                       $this->client->retrieveByNameType( $domain, 'www', 'CNAME' );
+               } catch ( \Throwable $e ) {
+                       return true;
+               }
+
+               return $this->ensure_dns_record( $domain, 'www', $domain, $ttl, 'CNAME', 0 );
        }
 
        /**
@@ -559,6 +636,13 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
         * @return string IPv4 address or empty string if unresolved.
         */
        protected function get_network_ip(): string {
+               if ( function_exists( 'get_site_option' ) ) {
+                       $override = trim( (string) get_site_option( 'porkpress_ssl_ipv4_override', '' ) );
+                       if ( '' !== $override ) {
+                               return $override;
+                       }
+               }
+
                $home = '';
                if ( function_exists( 'network_home_url' ) ) {
                        $home = network_home_url();
@@ -595,6 +679,13 @@ private const DOMAIN_LIST_MAX_PAGES = 100;
         * Detect the network's IPv6 address.
         */
        protected function get_network_ipv6(): string {
+               if ( function_exists( 'get_site_option' ) ) {
+                       $override = trim( (string) get_site_option( 'porkpress_ssl_ipv6_override', '' ) );
+                       if ( '' !== $override ) {
+                               return $override;
+                       }
+               }
+
                $home = '';
                if ( function_exists( 'network_home_url' ) ) {
                        $home = network_home_url();
@@ -713,7 +804,7 @@ KEY domain (domain)
                        return false;
                }
 
-               $ttl = $ttl ?? 300;
+               $ttl = $ttl ?? 600;
                if ( function_exists( 'apply_filters' ) ) {
                        $ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
                }

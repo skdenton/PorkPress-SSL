@@ -7,6 +7,7 @@
 use PorkPress\SSL\Logger;
 use PorkPress\SSL\Porkbun_Client;
 use PorkPress\SSL\Porkbun_Client_Error;
+use PorkPress\SSL\TXT_Propagation_Waiter;
 
 // Parse CLI options (--wp-root and --config).
 $opts = [];
@@ -121,6 +122,19 @@ if ( 'add' === $action || 'auth' === $action ) {
     if ( $result instanceof Porkbun_Client_Error ) {
         Logger::error('certbot_hook', ['action' => 'add', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], $result->message);
         fwrite(STDERR, "{$result->message}\n");
+        exit(1);
+    }
+    $timeout   = max( 1, (int) get_site_option( 'porkpress_ssl_txt_timeout', 600 ) );
+    $interval  = max( 1, (int) get_site_option( 'porkpress_ssl_txt_interval', 30 ) );
+    $ns_result = $client->getNs( $zone );
+    $nameservers = array();
+    if ( is_array( $ns_result ) && isset( $ns_result['ns'] ) && is_array( $ns_result['ns'] ) ) {
+        $nameservers = $ns_result['ns'];
+    }
+    $waiter = new TXT_Propagation_Waiter( $nameservers );
+    if ( ! $waiter->wait( $domain, $validation, $timeout, $interval ) ) {
+        Logger::error('certbot_hook', ['action' => 'wait', 'domain' => $domain, 'zone' => $zone, 'servers' => $nameservers], 'timeout');
+        fwrite(STDERR, "TXT record propagation timed out\n");
         exit(1);
     }
     Logger::info('certbot_hook', ['action' => 'add', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], 'success');
