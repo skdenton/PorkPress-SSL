@@ -874,11 +874,50 @@ domain varchar(191) NOT NULL,
 is_primary tinyint(1) NOT NULL DEFAULT 0,
 status varchar(20) NOT NULL DEFAULT '',
 PRIMARY KEY  (site_id, domain),
-KEY domain (domain)
+UNIQUE KEY domain (domain)
 ) {$charset_collate};";
 
                require_once ABSPATH . 'wp-admin/includes/upgrade.php';
                dbDelta( $sql );
+       }
+
+       /**
+        * Validate a fully-qualified domain name and return its ASCII form.
+        *
+        * @param string $domain Domain to validate.
+        * @return string|false ASCII domain on success, false if invalid.
+        */
+       protected function validate_fqdn( string $domain ) {
+               $domain = strtolower( trim( $domain ) );
+               if ( '' === $domain ) {
+                       return false;
+               }
+
+               if ( function_exists( 'idn_to_ascii' ) ) {
+                       $variant = defined( 'INTL_IDNA_VARIANT_UTS46' ) ? INTL_IDNA_VARIANT_UTS46 : 0;
+                       $ascii   = idn_to_ascii( $domain, IDNA_DEFAULT, $variant );
+                       if ( false === $ascii ) {
+                               return false;
+                       }
+               } else {
+                       $ascii = $domain;
+               }
+
+               if ( false === filter_var( $ascii, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME ) ) {
+                       return false;
+               }
+
+               if ( strlen( $ascii ) > 253 || false === strpos( $ascii, '.' ) ) {
+                       return false;
+               }
+
+               foreach ( explode( '.', $ascii ) as $label ) {
+                       if ( '' === $label || strlen( $label ) > 63 ) {
+                               return false;
+                       }
+               }
+
+               return $ascii;
        }
 
        /**
@@ -896,17 +935,28 @@ KEY domain (domain)
        public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '', ?int $ttl = null ) {
                global $wpdb;
 
+               $domain = sanitize_text_field( $domain );
+               $domain = $this->validate_fqdn( $domain );
+               if ( false === $domain ) {
+                       return new \WP_Error( 'invalid_domain', __( 'Invalid domain name.', 'porkpress-ssl' ) );
+               }
+
                $table = self::get_alias_table_name();
                $data  = array(
                        'site_id'    => $site_id,
-                       'domain'     => strtolower( sanitize_text_field( $domain ) ),
+                       'domain'     => $domain,
                        'is_primary' => $is_primary ? 1 : 0,
                        'status'     => sanitize_text_field( $status ),
                );
 
+               $wpdb->query( 'START TRANSACTION' );
                $result = $wpdb->insert( $table, $data, array( '%d', '%s', '%d', '%s' ) );
 
                if ( false === $result ) {
+                       $wpdb->query( 'ROLLBACK' );
+                       if ( ! empty( $wpdb->last_error ) && false !== stripos( $wpdb->last_error, 'duplicate' ) ) {
+                               return new \WP_Error( 'domain_exists', __( 'Domain already mapped to another site.', 'porkpress-ssl' ) );
+                       }
                        return false;
                }
 
@@ -917,9 +967,11 @@ KEY domain (domain)
 
                $dns = $this->create_a_record( $domain, $site_id, $ttl );
                if ( $dns instanceof Porkbun_Client_Error ) {
+                       $wpdb->query( 'ROLLBACK' );
                        return $dns;
                }
 
+               $wpdb->query( 'COMMIT' );
                $this->queue_wildcard_aware_issuance( $site_id, $domain );
                $this->clear_domain_cache();
                return true;
