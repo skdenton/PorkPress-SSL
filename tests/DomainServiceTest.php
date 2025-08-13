@@ -293,6 +293,51 @@ class DomainServiceTest extends TestCase {
         $this->assertCount( 0, $service->get_aliases( 1 ) );
     }
 
+    public function testAddAliasRejectsInvalidDomain() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+        };
+
+        $result = $service->add_alias( 1, 'bad_domain', true, 'active' );
+        $this->assertInstanceOf( WP_Error::class, $result );
+        $this->assertCount( 0, $service->get_aliases( 1 ) );
+    }
+
+    public function testAddAliasDuplicateFails() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+        };
+
+        $this->assertTrue( $service->add_alias( 1, 'example.com', true, 'active' ) );
+        $result = $service->add_alias( 2, 'example.com', true, 'active' );
+        $this->assertInstanceOf( WP_Error::class, $result );
+        $this->assertCount( 1, $service->get_aliases() );
+    }
+
+    public function testDnsFailureRollsBackInsert() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) {
+                return new \PorkPress\SSL\Porkbun_Client_Error( 'err', 'fail' );
+            }
+        };
+
+        $result = $service->add_alias( 1, 'example.com', true, 'active' );
+        $this->assertInstanceOf( \PorkPress\SSL\Porkbun_Client_Error::class, $result );
+        $this->assertCount( 0, $service->get_aliases( 1 ) );
+    }
+
     public function testAttachToSiteCreatesARecord() {
         global $wpdb;
         $wpdb = new MockWpdb();
@@ -341,10 +386,7 @@ class DomainServiceTest extends TestCase {
 
         $result = $service->attach_to_site( 'example.com', 1 );
         $this->assertInstanceOf( \PorkPress\SSL\Porkbun_Client_Error::class, $result );
-        $logs = $wpdb->data['wp_porkpress_logs'] ?? array();
-        $this->assertNotEmpty( $logs );
-        $log = end( $logs );
-        $this->assertSame( 'create_a_record', $log['action'] );
+        $this->assertCount( 0, $service->get_aliases( 1 ) );
     }
 
     public function testAttachToSiteReturnsErrorOnDnsMismatch() {

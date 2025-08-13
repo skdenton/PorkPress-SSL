@@ -2,6 +2,9 @@
 class MockWpdb {
     public $data = [];
     public $base_prefix = 'wp_';
+    public $last_error = '';
+    private $in_transaction = false;
+    private $backup = [];
 
     public function get_charset_collate() {
         return '';
@@ -27,6 +30,12 @@ class MockWpdb {
     }
 
     public function insert( $table, $data, $format = null ) {
+        foreach ( $this->data[ $table ] ?? [] as $row ) {
+            if ( $row['domain'] === $data['domain'] ) {
+                $this->last_error = 'Duplicate entry';
+                return false;
+            }
+        }
         $this->data[ $table ][] = $data;
         return 1;
     }
@@ -69,6 +78,26 @@ class MockWpdb {
     }
 
     public function query( $sql ) {
+        $upper = strtoupper( trim( $sql ) );
+        if ( 'START TRANSACTION' === $upper || 'BEGIN' === $upper ) {
+            $this->in_transaction = true;
+            $this->backup         = $this->data;
+            return true;
+        }
+        if ( 'ROLLBACK' === $upper ) {
+            if ( $this->in_transaction ) {
+                $this->data          = $this->backup;
+                $this->in_transaction = false;
+                $this->backup        = [];
+            }
+            return true;
+        }
+        if ( 'COMMIT' === $upper ) {
+            $this->in_transaction = false;
+            $this->backup        = [];
+            return true;
+        }
+
         if ( preg_match( "/UPDATE\s+(\w+)\s+SET\s+is_primary\s+=\s+CASE\s+WHEN\s+domain\s+=\s*'([^']+)'\s+THEN\s+1\s+ELSE\s+0\s+END\s+WHERE\s+site_id\s+=\s*(\d+)/i", $sql, $m ) ) {
             $table  = $m[1];
             $domain = $m[2];
