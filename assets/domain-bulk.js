@@ -17,7 +17,7 @@ jQuery(function($){
         var $progress = $('#porkpress-domain-progress');
         $progress.text('0/'+total);
         function next(){
-            if(!domains.length){$progress.text('Done');return;}
+            if(!domains.length){$progress.text(wp.i18n.__('Done', 'porkpress-ssl'));return;}
             var domain = domains.shift();
             $.post(porkpressBulk.ajaxUrl, {
                 action: 'porkpress_ssl_bulk_action',
