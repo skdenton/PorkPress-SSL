@@ -141,7 +141,9 @@ class Admin {
                 $domains         = $service->list_domains();
                 $total_domains   = 0;
                 $upcoming_expiry = 0;
-                if ( ! ( $domains instanceof Porkbun_Client_Error ) && ! empty( $domains['domains'] ) ) {
+                if ( $domains instanceof Porkbun_Client_Error ) {
+                        echo '<div class="notice notice-error"><p>' . esc_html( $domains->message ) . '</p></div>';
+                } elseif ( ! empty( $domains['domains'] ) ) {
                         $total_domains = count( $domains['domains'] );
                         $threshold     = time() + 30 * DAY_IN_SECONDS;
                         foreach ( $domains['domains'] as $domain ) {
@@ -1219,44 +1221,77 @@ public function render_site_page() {
                 wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
         }
 
-        $submitted = false;
+        $service        = new Domain_Service();
+        $submitted      = false;
+        $available      = false;
+        $domain        = '';
+        $justification = '';
+        $error         = '';
+
         if ( isset( $_POST['porkpress_ssl_domain'], $_POST['porkpress_ssl_justification'] ) && check_admin_referer( 'porkpress_ssl_request_domain' ) ) {
                 $domain        = sanitize_text_field( wp_unslash( $_POST['porkpress_ssl_domain'] ) );
                 $justification = sanitize_textarea_field( wp_unslash( $_POST['porkpress_ssl_justification'] ) );
-                $requests      = get_site_option( self::REQUESTS_OPTION, array() );
-                $requests[]    = array(
-                        'id'            => uniqid( '', true ),
-                        'site_id'       => get_current_blog_id(),
-                        'domain'        => $domain,
-                        'justification' => $justification,
-                );
-                update_site_option( self::REQUESTS_OPTION, $requests );
 
-                $site    = get_site( get_current_blog_id() );
-                $subject = __( 'New Domain Request', 'porkpress-ssl' );
-                $message = sprintf(
-                        __( 'Site %1$s requested domain %2$s. Justification: %3$s', 'porkpress-ssl' ),
-                        $site ? get_blog_option( $site->id, 'blogname' ) : get_current_blog_id(),
-                        $domain,
-                        $justification
-                );
-                Notifier::notify( 'warning', $subject, $message );
-                $submitted = true;
+                if ( isset( $_POST['porkpress_ssl_confirm'] ) ) {
+                        $requests   = get_site_option( self::REQUESTS_OPTION, array() );
+                        $requests[] = array(
+                                'id'            => uniqid( '', true ),
+                                'site_id'       => get_current_blog_id(),
+                                'domain'        => $domain,
+                                'justification' => $justification,
+                        );
+                        update_site_option( self::REQUESTS_OPTION, $requests );
+
+                        $site    = get_site( get_current_blog_id() );
+                        $subject = __( 'New Domain Request', 'porkpress-ssl' );
+                        $message = sprintf(
+                                __( 'Site %1$s requested domain %2$s. Justification: %3$s', 'porkpress-ssl' ),
+                                $site ? get_blog_option( $site->id, 'blogname' ) : get_current_blog_id(),
+                                $domain,
+                                $justification
+                        );
+                        Notifier::notify( 'warning', $subject, $message );
+                        $submitted = true;
+                } else {
+                        $check = $service->check_domain( $domain );
+                        if ( $check instanceof Porkbun_Client_Error ) {
+                                $error = $check->message;
+                        } elseif ( isset( $check['response']['avail'] ) && 'yes' === strtolower( $check['response']['avail'] ) ) {
+                                $available = true;
+                        } else {
+                                $error = __( 'Domain is not available.', 'porkpress-ssl' );
+                        }
+                }
         }
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html__( 'Request Domain', 'porkpress-ssl' ) . '</h1>';
         if ( $submitted ) {
                 echo '<div class="notice notice-success"><p>' . esc_html__( 'Request submitted.', 'porkpress-ssl' ) . '</p></div>';
+        } elseif ( $error ) {
+                echo '<div class="notice notice-error"><p>' . esc_html( $error ) . '</p></div>';
         }
-        echo '<form method="post">';
-        wp_nonce_field( 'porkpress_ssl_request_domain' );
-        echo '<table class="form-table" role="presentation">';
-        echo '<tr><th scope="row"><label for="porkpress-ssl-domain">' . esc_html__( 'Desired Domain', 'porkpress-ssl' ) . '</label></th><td><input name="porkpress_ssl_domain" type="text" id="porkpress-ssl-domain" class="regular-text" required></td></tr>';
-        echo '<tr><th scope="row"><label for="porkpress-ssl-justification">' . esc_html__( 'Justification', 'porkpress-ssl' ) . '</label></th><td><textarea name="porkpress_ssl_justification" id="porkpress-ssl-justification" class="large-text" rows="5" required></textarea></td></tr>';
-        echo '</table>';
-        submit_button( __( 'Submit Request', 'porkpress-ssl' ) );
-        echo '</form>';
+
+        if ( $available && ! $submitted ) {
+                $purchase_url = 'https://porkbun.com/checkout/search?q=' . rawurlencode( $domain );
+                echo '<p>' . sprintf( esc_html__( 'Domain available. Complete the purchase at Porkbun then click %s to continue.', 'porkpress-ssl' ), '<a href="' . esc_url( $purchase_url ) . '" target="_blank">' . esc_html__( 'Purchase', 'porkpress-ssl' ) . '</a>' ) . '</p>';
+                echo '<form method="post">';
+                wp_nonce_field( 'porkpress_ssl_request_domain' );
+                echo '<input type="hidden" name="porkpress_ssl_domain" value="' . esc_attr( $domain ) . '" />';
+                echo '<input type="hidden" name="porkpress_ssl_justification" value="' . esc_attr( $justification ) . '" />';
+                echo '<input type="hidden" name="porkpress_ssl_confirm" value="1" />';
+                submit_button( __( "I've purchased", 'porkpress-ssl' ) );
+                echo '</form>';
+        } elseif ( ! $submitted ) {
+                echo '<form method="post">';
+                wp_nonce_field( 'porkpress_ssl_request_domain' );
+                echo '<table class="form-table" role="presentation">';
+                echo '<tr><th scope="row"><label for="porkpress-ssl-domain">' . esc_html__( 'Desired Domain', 'porkpress-ssl' ) . '</label></th><td><input name="porkpress_ssl_domain" type="text" id="porkpress-ssl-domain" class="regular-text" value="' . esc_attr( $domain ) . '" required></td></tr>';
+                echo '<tr><th scope="row"><label for="porkpress-ssl-justification">' . esc_html__( 'Justification', 'porkpress-ssl' ) . '</label></th><td><textarea name="porkpress_ssl_justification" id="porkpress-ssl-justification" class="large-text" rows="5" required>' . esc_textarea( $justification ) . '</textarea></td></tr>';
+                echo '</table>';
+                submit_button( __( 'Check Availability', 'porkpress-ssl' ) );
+                echo '</form>';
+        }
         echo '</div>';
 }
 }
