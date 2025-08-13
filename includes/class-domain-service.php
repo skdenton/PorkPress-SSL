@@ -443,6 +443,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
             $result = $this->client->listDomains( $current_page, $per_page );
 
             if ( $result instanceof Porkbun_Client_Error ) {
+                Notifier::notify( 'error', __( 'Porkbun API error', 'porkpress-ssl' ), $result->message );
                 return $result;
             }
 
@@ -490,6 +491,20 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
         }
 
         return $final;
+    }
+
+    /**
+     * Check domain availability via Porkbun.
+     *
+     * @param string $domain Domain name.
+     * @return array|Porkbun_Client_Error
+     */
+    public function check_domain( string $domain ) {
+        $result = $this->client->checkDomain( $domain );
+        if ( $result instanceof Porkbun_Client_Error ) {
+            Notifier::notify( 'error', __( 'Porkbun API error', 'porkpress-ssl' ), $result->message );
+        }
+        return $result;
     }
 
        /**

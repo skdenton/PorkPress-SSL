@@ -72,16 +72,31 @@ class Porkbun_Client {
 		}
 	}
 
-        /**
-         * List domains with pagination.
-         */
-        public function listDomains( int $page = 1, int $per_page = 100 ) {
-                $start = max( 0, ( $page - 1 ) * $per_page );
+       /**
+        * List domains with pagination.
+        *
+        * Porkbun's API returns up to 1000 domains per request and uses a
+        * "start" offset for paging. The client performs slicing to honour the
+        * requested per-page size while only fetching the necessary chunk.
+        */
+       public function listDomains( int $page = 1, int $per_page = 100 ) {
+               $offset      = max( 0, ( $page - 1 ) * $per_page );
+               $chunk_start = (int) ( floor( $offset / 1000 ) * 1000 );
 
-                return $this->request( 'domain/listAll', [
-                        'start' => (string) $start,
-                ] );
-        }
+               $result = $this->request( 'domain/listAll', [
+                       'start' => (string) $chunk_start,
+               ] );
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       return $result;
+               }
+
+               if ( isset( $result['domains'] ) && is_array( $result['domains'] ) ) {
+                       $result['domains'] = array_slice( $result['domains'], $offset - $chunk_start, $per_page );
+               }
+
+               return $result;
+       }
 
        /**
         * Retrieve details for a single domain.
@@ -92,12 +107,21 @@ class Porkbun_Client {
                return $this->request( "domain/get/{$domain}", [] );
        }
 
+       /**
+        * Check whether a domain is available for registration.
+        */
+       public function checkDomain( string $domain ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "domain/checkDomain/{$domain}", [] );
+       }
+
         /**
          * Retrieve DNS records for a domain.
  */
         public function getRecords( string $domain ) {
-		return $this->request( "dns/retrieve/{$domain}", [] );
-	}
+                return $this->request( "dns/retrieve/{$domain}", [] );
+        }
 
 	/**
 	 * Create a TXT record.
@@ -129,6 +153,37 @@ class Porkbun_Client {
                         'ttl'     => $ttl,
                 ] );
         }
+
+       /**
+        * Retrieve a single DNS record by ID.
+        */
+       public function getRecord( string $domain, int $record_id ) {
+               return $this->request( "dns/retrieve/{$domain}/{$record_id}", [] );
+       }
+
+       /**
+        * Create a DNS record of any type.
+        */
+       public function createRecord( string $domain, string $type, string $name, string $content, int $ttl = 300 ) {
+               return $this->request( "dns/create/{$domain}", [
+                       'type'    => $type,
+                       'name'    => $name,
+                       'content' => $content,
+                       'ttl'     => $ttl,
+               ] );
+       }
+
+       /**
+        * Edit a DNS record by ID.
+        */
+       public function editRecord( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 300 ) {
+               return $this->request( "dns/edit/{$domain}/{$record_id}", [
+                       'type'    => $type,
+                       'name'    => $name,
+                       'content' => $content,
+                       'ttl'     => $ttl,
+               ] );
+       }
 
        /**
         * Retrieve DNS records by name and type.
