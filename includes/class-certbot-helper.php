@@ -21,22 +21,32 @@ class Certbot_Helper {
      * @return string
      */
     public static function build_command( array $domains, string $cert_name, bool $staging, bool $renewal = false ): string {
-        $cert_root  = function_exists( '\\get_site_option' ) ? \get_site_option(
+        $cert_root = function_exists( '\\get_site_option' ) ? \get_site_option(
                 'porkpress_ssl_cert_root',
-                defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt'
-        ) : ( defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
-        $state_root = function_exists( '\\get_site_option' ) ? \get_site_option(
-                'porkpress_ssl_state_root',
-                defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl'
-        ) : ( defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
-        $hook = dirname( __DIR__ ) . '/bin/porkbun-hook.php';
+                defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : ''
+        ) : ( defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '' );
+        $work_dir = function_exists( '\\get_site_option' ) ? \get_site_option(
+                'porkpress_ssl_work_dir',
+                defined( 'PORKPRESS_WORK_DIR' ) ? PORKPRESS_WORK_DIR : ''
+        ) : ( defined( 'PORKPRESS_WORK_DIR' ) ? PORKPRESS_WORK_DIR : '' );
+        $logs_dir = function_exists( '\\get_site_option' ) ? \get_site_option(
+                'porkpress_ssl_logs_dir',
+                defined( 'PORKPRESS_LOGS_DIR' ) ? PORKPRESS_LOGS_DIR : ''
+        ) : ( defined( 'PORKPRESS_LOGS_DIR' ) ? PORKPRESS_LOGS_DIR : '' );
+        $hook = dirname( __DIR__ ) . '/bin/porkpress-hook.php';
         $cmd  = 'certbot certonly --manual --non-interactive --agree-tos --manual-public-ip-logging-ok --preferred-challenges dns';
         $cmd .= ' --manual-auth-hook ' . escapeshellarg( $hook . ' add' );
         $cmd .= ' --manual-cleanup-hook ' . escapeshellarg( $hook . ' del' );
         $cmd .= ' --cert-name ' . escapeshellarg( $cert_name );
-        $cmd .= ' --config-dir ' . escapeshellarg( $cert_root );
-        $cmd .= ' --work-dir ' . escapeshellarg( $state_root );
-        $cmd .= ' --logs-dir ' . escapeshellarg( $state_root );
+        if ( $cert_root ) {
+            $cmd .= ' --config-dir ' . escapeshellarg( $cert_root );
+        }
+        if ( $work_dir ) {
+            $cmd .= ' --work-dir ' . escapeshellarg( $work_dir );
+        }
+        if ( $logs_dir ) {
+            $cmd .= ' --logs-dir ' . escapeshellarg( $logs_dir );
+        }
         if ( $renewal ) {
             $cmd .= ' --force-renewal';
         }

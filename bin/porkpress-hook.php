@@ -8,9 +8,48 @@ use PorkPress\SSL\Logger;
 use PorkPress\SSL\Porkbun_Client;
 use PorkPress\SSL\Porkbun_Client_Error;
 
+// Parse CLI options (--wp-root and --config).
+$opts = [];
+$args = [];
+for ($i = 1; $i < $argc; $i++) {
+    $arg = $argv[$i];
+    if (0 === strpos($arg, '--')) {
+        $eq = strpos($arg, '=');
+        $key = $eq ? substr($arg, 2, $eq - 2) : substr($arg, 2);
+        $val = $eq ? substr($arg, $eq + 1) : ($argv[++$i] ?? '');
+        $opts[$key] = $val;
+    } else {
+        $args[] = $arg;
+    }
+}
+
+// Load environment overrides from config file.
+$config_path = $opts['config'] ?? getenv('PORKPRESS_SSL_CONFIG') ?? '/etc/default/porkpress-ssl';
+if (is_string($config_path) && file_exists($config_path)) {
+    foreach (file($config_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (preg_match('/^\s*#/', $line)) {
+            continue;
+        }
+        if (preg_match('/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/', $line, $m)) {
+            $key = $m[1];
+            $val = trim($m[2], "'\"");
+            if ('' === getenv($key)) {
+                putenv($key . '=' . $val);
+            }
+        }
+    }
+}
+
+if (!empty($opts['wp-root'])) {
+    putenv('WP_ROOT=' . $opts['wp-root']);
+}
+
 // Attempt to locate and load WordPress.
 $possible = [];
-if ( getenv('WP_LOAD_PATH') ) {
+if (getenv('WP_ROOT')) {
+    $possible[] = rtrim(getenv('WP_ROOT'), '/\\') . '/wp-load.php';
+}
+if (getenv('WP_LOAD_PATH')) {
     $possible[] = rtrim(getenv('WP_LOAD_PATH'), '/\\') . '/wp-load.php';
 }
 $dir = __DIR__;
@@ -27,7 +66,7 @@ foreach ($possible as $path) {
     }
 }
 if ( ! $wp_loaded ) {
-    fwrite(STDERR, "Unable to locate wp-load.php. Set WP_LOAD_PATH.\n");
+    fwrite(STDERR, "Unable to locate wp-load.php. Set WP_ROOT or WP_LOAD_PATH.\n");
     exit(1);
 }
 
@@ -38,16 +77,16 @@ if ( ! class_exists(Porkbun_Client::class) ) {
     exit(1);
 }
 
-$action = $argv[1] ?? $args[0] ?? '';
-$action = strtolower($action);
-if ( ! in_array($action, ['add', 'auth', 'del', 'cleanup'], true) ) {
-    fwrite(STDERR, "Usage: porkbun-hook.php <add|del>\n");
+$action = strtolower($args[0] ?? '');
+if ( ! in_array($action, ['add', 'auth', 'del', 'cleanup', 'deploy', 'renew'], true) ) {
+    fwrite(STDERR, "Usage: porkpress-hook.php [--wp-root=<path>] <add|del|deploy|renew>\n");
     exit(1);
 }
 
 $domain = getenv('CERTBOT_DOMAIN');
 $validation = getenv('CERTBOT_VALIDATION');
-if ( ! $domain || ( 'add' === $action || 'auth' === $action ) && ! $validation ) {
+$token = getenv('CERTBOT_TOKEN');
+if (('add' === $action || 'auth' === $action) && ( !$domain || !$validation )) {
     fwrite(STDERR, "CERTBOT_DOMAIN or CERTBOT_VALIDATION missing.\n");
     exit(1);
 }
@@ -80,18 +119,27 @@ $client = new Porkbun_Client($api_key, $api_secret);
 if ( 'add' === $action || 'auth' === $action ) {
     $result = $client->createTxtRecord($zone, $record_name, $validation, 600);
     if ( $result instanceof Porkbun_Client_Error ) {
-        Logger::error('certbot_hook', ['action' => 'add', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name], $result->message);
+        Logger::error('certbot_hook', ['action' => 'add', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], $result->message);
         fwrite(STDERR, "{$result->message}\n");
         exit(1);
     }
-    Logger::info('certbot_hook', ['action' => 'add', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name], 'success');
+    Logger::info('certbot_hook', ['action' => 'add', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], 'success');
+    exit(0);
+}
+
+if ( 'deploy' === $action || 'renew' === $action ) {
+    Logger::info('certbot_hook', [
+        'action'  => $action,
+        'renewed' => getenv('RENEWED_DOMAINS') ?: '',
+        'failed'  => getenv('FAILED_DOMAINS') ?: '',
+    ], 'noop');
     exit(0);
 }
 
 // Deletion path.
 $records = $client->getRecords($zone);
 if ( $records instanceof Porkbun_Client_Error ) {
-    Logger::error('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name], $records->message);
+    Logger::error('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], $records->message);
     fwrite(STDERR, "{$records->message}\n");
     exit(1);
 }
@@ -100,7 +148,7 @@ foreach ( $records['records'] ?? [] as $rec ) {
     if ( 'TXT' === ($rec['type'] ?? '') && $rec['name'] === $record_name && ($validation ? $rec['content'] === $validation : true) ) {
         $del = $client->deleteRecord($zone, (int) $rec['id']);
         if ( $del instanceof Porkbun_Client_Error ) {
-            Logger::error('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'id' => $rec['id']], $del->message);
+            Logger::error('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'id' => $rec['id'], 'token' => $token], $del->message);
             fwrite(STDERR, "{$del->message}\n");
             exit(1);
         }
@@ -108,9 +156,9 @@ foreach ( $records['records'] ?? [] as $rec ) {
     }
 }
 if ( $deleted ) {
-    Logger::info('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name], 'success');
+    Logger::info('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], 'success');
 } else {
-    Logger::warn('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name], 'record_not_found');
+    Logger::warn('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], 'record_not_found');
 }
 
 exit(0);
