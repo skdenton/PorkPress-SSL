@@ -118,6 +118,15 @@ class CLI extends WP_CLI_Command {
                         wp_mkdir_p( $cert_root );
                 }
 
+                // If a certificate with this lineage already exists, include all
+                // of its current SANs to ensure we modify the existing
+                // certificate rather than inadvertently creating a new
+                // lineage or dropping names.
+                $existing = Certbot_Helper::list_certificates();
+                if ( isset( $existing[ $cert_name ]['domains'] ) ) {
+                        $domains = array_values( array_unique( array_merge( $existing[ $cert_name ]['domains'], $domains ) ) );
+                }
+
                 $cmd = Certbot_Helper::build_command( $domains, $cert_name, $staging, $renewal );
 
                 $result = WP_CLI::launch( $cmd, false, true );

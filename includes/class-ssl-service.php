@@ -92,7 +92,19 @@ class SSL_Service {
                        return;
                }
 
-               $all_domains = array();
+               // Gather the full set of domains across the network so that
+               // certbot is invoked with all current SANs. This avoids
+               // creating unintended new certificate lineages or dropping
+               // existing names when expanding or shrinking the set.
+               $records     = $domains->get_aliases();
+               $all_domains = array_values(
+                       array_unique(
+                               array_map( fn( $a ) => $a['domain'], $records )
+                       )
+               );
+
+               // Log queued sites for traceability but don't rely on them for
+               // constructing the final domain list.
                foreach ( $queue as $site_id ) {
                        $aliases = $domains->get_aliases( $site_id );
                        $names   = array_map( fn( $a ) => $a['domain'], $aliases );
@@ -105,11 +117,7 @@ class SSL_Service {
                                ),
                                'queued'
                        );
-
-                       $all_domains = array_merge( $all_domains, $names );
                }
-
-               $all_domains = array_values( array_unique( $all_domains ) );
 
                if ( empty( $all_domains ) ) {
                        self::clear_queue();
