@@ -7,6 +7,8 @@
 
 namespace PorkPress\SSL;
 
+require_once __DIR__ . '/class-runner.php';
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -243,9 +245,9 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                        foreach ( $nameservers as $ns ) {
                                $ns_esc = escapeshellarg( $ns );
                                $cmd    = sprintf( 'dig +short %s %s @%s', $d, $type, $ns_esc );
-                               $output = @shell_exec( $cmd );
-                               if ( $output ) {
-                                       $lines = preg_split( '/\s+/', trim( $output ) );
+                               $result = Runner::run( $cmd );
+                               if ( $result['output'] ) {
+                                       $lines = preg_split( '/\s+/', trim( $result['output'] ) );
                                        foreach ( $lines as $line ) {
                                                if ( '' !== $line ) {
                                                        $results[] = rtrim( $line, '.' );

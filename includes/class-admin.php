@@ -7,6 +7,8 @@
 
 namespace PorkPress\SSL;
 
+require_once __DIR__ . '/class-runner.php';
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -185,6 +187,7 @@ class Admin {
                __( 'Last SSL Run Status', 'porkpress-ssl' )        => $ssl_status,
                __( 'Last Reconcile', 'porkpress-ssl' )            => $reconcile_stat,
                __( 'Apache Reload Command', 'porkpress-ssl' )      => $apache_cmd ? $apache_cmd : __( 'Not found', 'porkpress-ssl' ),
+               __( 'Command Runner', 'porkpress-ssl' )            => Runner::describe(),
        );
                 foreach ( $cards as $label => $value ) {
                         echo '<div class="card" style="flex:1 1 200px;"><h2>' . esc_html( $label ) . '</h2><p>' . esc_html( $value ) . '</p></div>';

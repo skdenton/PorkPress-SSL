@@ -7,6 +7,8 @@
 
 namespace PorkPress\SSL;
 
+require_once __DIR__ . '/class-runner.php';
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -94,7 +96,7 @@ defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
 $staging   = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 
 $cmd    = self::build_certbot_command( $manifest['domains'], $cert_name, $staging, true );
-$result = self::execute( $cmd );
+$result = self::execute( $cmd, 'certbot' );
         if ( 0 !== $result['code'] ) {
         Logger::error( 'renew_certificate', array( 'attempt' => $attempt, 'output' => $result['output'] ), 'certbot failed' );
         update_site_option( self::OPTION_ATTEMPTS, $attempt );
@@ -126,17 +128,11 @@ $result = self::execute( $cmd );
  * @param string $cmd Command to run.
  * @return array{code:int,output:string}
  */
-protected static function execute( string $cmd ): array {
+protected static function execute( string $cmd, string $context = '' ): array {
     if ( is_callable( self::$runner ) ) {
-        return call_user_func( self::$runner, $cmd );
+        return call_user_func( self::$runner, $cmd, $context );
     }
-    $output = array();
-    $code   = 0;
-    exec( $cmd . ' 2>&1', $output, $code );
-    return array(
-        'code'   => $code,
-        'output' => implode( "\n", $output ),
-    );
+    return Runner::run( $cmd, $context );
 }
 
     /**
@@ -177,8 +173,7 @@ protected static function execute( string $cmd ): array {
      * Check if a command exists in PATH.
      */
     protected static function command_exists( string $cmd ): bool {
-        $path = trim( shell_exec( 'command -v ' . escapeshellarg( $cmd ) . ' 2>/dev/null' ) );
-        return '' !== $path;
+        return Runner::command_exists( $cmd );
     }
 
 /**
@@ -363,7 +358,7 @@ $manifest = array(
             Logger::error( 'apache_reload', array( 'cmd' => '' ), 'not_found' );
             $ok = false;
         } else {
-            $result = self::execute( $cmd );
+            $result = self::execute( $cmd, 'apache' );
             self::$last_reload = $result;
             if ( 0 !== $result['code'] ) {
                 $context = array(

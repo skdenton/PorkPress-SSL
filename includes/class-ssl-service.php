@@ -7,6 +7,8 @@
 
 namespace PorkPress\SSL;
 
+require_once __DIR__ . '/class-runner.php';
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -137,15 +139,9 @@ class SSL_Service {
 
                        $result = null;
                        if ( is_callable( Renewal_Service::$runner ) ) {
-                               $result = call_user_func( Renewal_Service::$runner, $cmd );
+                               $result = call_user_func( Renewal_Service::$runner, $cmd, 'certbot' );
                        } else {
-                               $output = array();
-                               $code   = 0;
-                               exec( $cmd . ' 2>&1', $output, $code );
-                               $result = array(
-                                       'code'   => $code,
-                                       'output' => implode( "\n", $output ),
-                               );
+                               $result = Runner::run( $cmd, 'certbot' );
                        }
 
                        if ( 0 !== $result['code'] ) {
