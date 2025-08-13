@@ -338,6 +338,54 @@ class DomainServiceTest extends TestCase {
         $this->assertCount( 0, $service->get_aliases( 1 ) );
     }
 
+    public function testCreateRecordAddsWwwCnameForApex() {
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public array $calls = array();
+            public function __construct() {}
+            protected function ensure_dns_record( string $domain, string $name, string $content, int $ttl, string $type, int $site_id ) {
+                $this->calls[] = array( $name, $type, $content );
+                return true;
+            }
+            protected function ensure_www_cname( string $domain, int $ttl ) {
+                if ( substr_count( $domain, '.' ) > 1 ) {
+                    return true;
+                }
+                return $this->ensure_dns_record( $domain, 'www', $domain, $ttl, 'CNAME', 0 );
+            }
+            public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+            protected function get_network_ipv6(): string { return ''; }
+        };
+
+        $service->call_create( 'example.com' );
+        $names = array_column( $service->calls, 0 );
+        $this->assertContains( 'www', $names );
+    }
+
+    public function testCreateRecordSkipsWwwForSubdomain() {
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public array $calls = array();
+            public function __construct() {}
+            protected function ensure_dns_record( string $domain, string $name, string $content, int $ttl, string $type, int $site_id ) {
+                $this->calls[] = array( $name, $type, $content );
+                return true;
+            }
+            protected function ensure_www_cname( string $domain, int $ttl ) {
+                if ( substr_count( $domain, '.' ) > 1 ) {
+                    return true;
+                }
+                return $this->ensure_dns_record( $domain, 'www', $domain, $ttl, 'CNAME', 0 );
+            }
+            public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+            protected function get_network_ipv6(): string { return ''; }
+        };
+
+        $service->call_create( 'sub.example.com' );
+        $names = array_column( $service->calls, 0 );
+        $this->assertNotContains( 'www', $names );
+    }
+
     public function testAttachToSiteCreatesARecord() {
         global $wpdb;
         $wpdb = new MockWpdb();

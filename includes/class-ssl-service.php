@@ -92,11 +92,14 @@ class SSL_Service {
                        return;
                }
 
-               // Gather the full set of domains across the network so that
-               // certbot is invoked with all current SANs. This avoids
-               // creating unintended new certificate lineages or dropping
-               // existing names when expanding or shrinking the set.
-               $records     = $domains->get_aliases();
+               // Gather the full set of domains across the network, excluding
+               // internal subdomains so that certbot is invoked only with
+               // external SANs.
+               $records = $domains->get_aliases();
+               $records = array_filter(
+                       $records,
+                       fn( $a ) => ! $domains->is_internal_subdomain( (int) $a['site_id'], $a['domain'] )
+               );
                $all_domains = array_values(
                        array_unique(
                                array_map( fn( $a ) => $a['domain'], $records )
@@ -124,74 +127,118 @@ class SSL_Service {
                        return;
                }
 
-               $cert_name = \get_site_option(
-                       'porkpress_ssl_cert_name',
-                       defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
-               );
-               $staging   = function_exists( '\\get_site_option' ) ? (bool) \get_site_option( 'porkpress_ssl_le_staging', 0 ) : false;
+               $staging = function_exists( '\\get_site_option' ) ? (bool) \get_site_option( 'porkpress_ssl_le_staging', 0 ) : false;
 
-               $cmd = Renewal_Service::build_certbot_command( $all_domains, $cert_name, $staging, false );
+               $shards = self::shard_domains( $all_domains );
+               $all_ok = true;
+               foreach ( $shards as $index => $names ) {
+                       $cert_name = 'porkpress-shard-' . $index;
+                       $cmd       = Renewal_Service::build_certbot_command( $names, $cert_name, $staging, false );
 
-               $result = null;
-               if ( is_callable( Renewal_Service::$runner ) ) {
-                       $result = call_user_func( Renewal_Service::$runner, $cmd );
-               } else {
-                       $output = array();
-                       $code   = 0;
-                       exec( $cmd . ' 2>&1', $output, $code );
-                       $result = array(
-                               'code'   => $code,
-                               'output' => implode( "\n", $output ),
-                       );
-               }
+                       $result = null;
+                       if ( is_callable( Renewal_Service::$runner ) ) {
+                               $result = call_user_func( Renewal_Service::$runner, $cmd );
+                       } else {
+                               $output = array();
+                               $code   = 0;
+                               exec( $cmd . ' 2>&1', $output, $code );
+                               $result = array(
+                                       'code'   => $code,
+                                       'output' => implode( "\n", $output ),
+                               );
+                       }
 
-               if ( 0 !== $result['code'] ) {
-                       Logger::error(
+                       if ( 0 !== $result['code'] ) {
+                               $all_ok = false;
+                               Logger::error(
+                                       'issue_certificate',
+                                       array(
+                                               'site_ids' => $queue,
+                                               'domains'  => $names,
+                                               'output'   => $result['output'],
+                                       ),
+                                       'certbot failed'
+                               );
+                               continue;
+                       }
+
+                       $manifest_ok = Renewal_Service::write_manifest( $names, $cert_name );
+                       $deploy_ok   = Renewal_Service::deploy_to_apache( $cert_name );
+                       if ( ! $manifest_ok || ! $deploy_ok ) {
+                               $all_ok = false;
+                               Logger::error(
+                                       'issue_certificate',
+                                       array(
+                                               'site_ids' => $queue,
+                                               'domains'  => $names,
+                                       ),
+                                       'post-deploy failed'
+                               );
+                               continue;
+                       }
+
+                       Logger::info(
                                'issue_certificate',
                                array(
                                        'site_ids' => $queue,
-                                       'domains'  => $all_domains,
-                                       'output'   => $result['output'],
+                                       'domains'  => $names,
                                ),
-                               'certbot failed'
+                               'success'
                        );
-                       Notifier::notify(
-                               'error',
-                               __( 'SSL issuance failed', 'porkpress-ssl' ),
-                               __( 'Certbot failed during issuance.', 'porkpress-ssl' )
-                       );
-                       return;
                }
 
-               $manifest_ok = Renewal_Service::write_manifest( $all_domains, $cert_name );
-               $deploy_ok   = Renewal_Service::deploy_to_apache( $cert_name );
-               if ( ! $manifest_ok || ! $deploy_ok ) {
-                       Logger::error(
-                               'issue_certificate',
-                               array(
-                                       'site_ids' => $queue,
-                                       'domains'  => $all_domains,
-                               ),
-                               'post-deploy failed'
-                       );
-                       return;
-               }
-
-               Logger::info(
-                       'issue_certificate',
-                       array(
-                               'site_ids' => $queue,
-                               'domains'  => $all_domains,
-                       ),
-                       'success'
-               );
                Notifier::notify(
-                       'success',
-                       __( 'SSL certificate issued', 'porkpress-ssl' ),
-                       __( 'Certificate issuance completed successfully.', 'porkpress-ssl' )
+                       $all_ok ? 'success' : 'error',
+                       $all_ok ? __( 'SSL certificate issued', 'porkpress-ssl' ) : __( 'SSL issuance failed', 'porkpress-ssl' ),
+                       $all_ok ? __( 'Certificate issuance completed successfully.', 'porkpress-ssl' ) : __( 'Certbot failed during issuance.', 'porkpress-ssl' )
                );
 
                self::clear_queue();
+       }
+
+       /**
+        * Group domains into deterministic shards of at most 90 names.
+        *
+        * @param array $domains List of domains.
+        * @return array<int, array<int, string>> Map of shard index => domains.
+        */
+       public static function shard_domains( array $domains ): array {
+               $domains = array_values( array_unique( $domains ) );
+               $count   = count( $domains );
+               if ( $count <= 0 ) {
+                       return array();
+               }
+
+               $shard_count = max( 1, (int) ceil( $count / 90 ) );
+
+               do {
+                       $buckets = array_fill( 0, $shard_count, array() );
+                       foreach ( $domains as $d ) {
+                               $hash   = crc32( $d );
+                               $bucket = $hash % $shard_count;
+                               $buckets[ $bucket ][] = $d;
+                       }
+                       $max = 0;
+                       foreach ( $buckets as $b ) {
+                               if ( count( $b ) > $max ) {
+                                       $max = count( $b );
+                               }
+                       }
+                       if ( $max > 90 ) {
+                               $shard_count++;
+                       }
+               } while ( $max > 90 );
+
+               $result = array();
+               $i      = 1;
+               foreach ( $buckets as $bucket ) {
+                       if ( ! empty( $bucket ) ) {
+                               $result[ $i ] = $bucket;
+                               $i++;
+                       }
+               }
+
+               return $result;
        }
 }
 

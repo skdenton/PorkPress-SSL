@@ -132,24 +132,28 @@ class SSLServiceTest extends TestCase {
                 $this->seen[] = $site_id;
                 if ( null === $site_id ) {
                     return array(
-                        array( 'domain' => 'example.com' ),
-                        array( 'domain' => 'www.example.com' ),
-                        array( 'domain' => 'foo.com' ),
+                        array( 'domain' => 'example.com', 'site_id' => 1 ),
+                        array( 'domain' => 'www.example.com', 'site_id' => 1 ),
+                        array( 'domain' => 'foo.com', 'site_id' => 2 ),
+                        array( 'domain' => 'internal.example.com', 'site_id' => 3 ),
                     );
                 }
                 if ( 1 === $site_id ) {
                     return array(
-                        array( 'domain' => 'example.com' ),
-                        array( 'domain' => 'www.example.com' ),
+                        array( 'domain' => 'example.com', 'site_id' => 1 ),
+                        array( 'domain' => 'www.example.com', 'site_id' => 1 ),
                     );
                 }
                 if ( 2 === $site_id ) {
                     return array(
-                        array( 'domain' => 'foo.com' ),
-                        array( 'domain' => 'www.example.com' ),
+                        array( 'domain' => 'foo.com', 'site_id' => 2 ),
+                        array( 'domain' => 'www.example.com', 'site_id' => 1 ),
                     );
                 }
                 return array();
+            }
+            public function is_internal_subdomain( int $site_id, string $domain ): bool {
+                return 'internal.example.com' === $domain;
             }
         };
 
@@ -162,7 +166,7 @@ class SSLServiceTest extends TestCase {
         \PorkPress\SSL\SSL_Service::run_queue( $domains );
 
         $expected_domains = array( 'example.com', 'www.example.com', 'foo.com' );
-        $expected_cmd     = \PorkPress\SSL\Renewal_Service::build_certbot_command( $expected_domains, 'porkpress-network', false, false );
+        $expected_cmd     = \PorkPress\SSL\Renewal_Service::build_certbot_command( $expected_domains, 'porkpress-shard-1', false, false );
         $this->assertSame( $expected_cmd, $commands[0] );
 
         $manifest = json_decode( file_get_contents( PORKPRESS_STATE_ROOT . '/manifest.json' ), true );
@@ -173,5 +177,33 @@ class SSLServiceTest extends TestCase {
 
         $this->assertSame( [ null, 1, 2 ], $domains->seen );
         $this->assertSame( [], \PorkPress\SSL\SSL_Service::get_queue() );
+    }
+
+    public function testShardDomainsRespectsLimit() {
+        $domains = array();
+        for ( $i = 0; $i < 200; $i++ ) {
+            $domains[] = "d{$i}.example.com";
+        }
+
+        $shards = \PorkPress\SSL\SSL_Service::shard_domains( $domains );
+        foreach ( $shards as $list ) {
+            $this->assertLessThanOrEqual( 90, count( $list ) );
+        }
+
+        // Ensure deterministic assignment for a sample.
+        $map = array();
+        foreach ( $shards as $idx => $list ) {
+            foreach ( $list as $name ) {
+                $map[ $name ] = $idx;
+            }
+        }
+        $sample = \PorkPress\SSL\SSL_Service::shard_domains( $domains );
+        $map2   = array();
+        foreach ( $sample as $idx => $list ) {
+            foreach ( $list as $name ) {
+                $map2[ $name ] = $idx;
+            }
+        }
+        $this->assertSame( $map, $map2 );
     }
 }

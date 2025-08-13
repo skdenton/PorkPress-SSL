@@ -1118,6 +1118,21 @@ echo '<tr>';
                }
 
                $aliases = $service->get_aliases( $site_id );
+               // Build shard map for display.
+               $all_aliases = $service->get_aliases();
+               $external   = array_filter(
+                       $all_aliases,
+                       fn( $a ) => ! $service->is_internal_subdomain( (int) $a['site_id'], $a['domain'] )
+               );
+               $domain_map = array();
+               if ( ! empty( $external ) ) {
+                       $groups = \PorkPress\SSL\SSL_Service::shard_domains( array_map( fn( $a ) => $a['domain'], $external ) );
+                       foreach ( $groups as $idx => $names ) {
+                               foreach ( $names as $n ) {
+                                       $domain_map[ $n ] = 'porkpress-shard-' . $idx;
+                               }
+                       }
+               }
 
                echo '<div class="wrap">';
                echo '<h1>' . esc_html__( 'Domain Aliases', 'porkpress-ssl' ) . '</h1>';
@@ -1159,7 +1174,7 @@ echo '<tr>';
                }
 
                echo '<table class="widefat fixed striped">';
-               echo '<thead><tr><th>' . esc_html__( 'Domain', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Primary', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
+               echo '<thead><tr><th>' . esc_html__( 'Domain', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Shard', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Primary', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
 
                if ( empty( $aliases ) ) {
                        echo '<tr><td colspan="3">' . esc_html__( 'No aliases found.', 'porkpress-ssl' ) . '</td></tr>';
@@ -1167,6 +1182,8 @@ echo '<tr>';
                        foreach ( $aliases as $alias ) {
                                echo '<tr>';
                                echo '<td>' . esc_html( $alias['domain'] ) . '</td>';
+                               $shard = isset( $domain_map[ $alias['domain'] ] ) ? $domain_map[ $alias['domain'] ] : esc_html__( 'internal', 'porkpress-ssl' );
+                               echo '<td>' . esc_html( $shard ) . '</td>';
                                echo '<td>' . ( $alias['is_primary'] ? '&#10003;' : '' ) . '</td>';
                                echo '<td>';
                                if ( ! $alias['is_primary'] ) {
