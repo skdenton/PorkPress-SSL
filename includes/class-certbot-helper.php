@@ -7,6 +7,8 @@
 
 namespace PorkPress\SSL;
 
+require_once __DIR__ . '/class-runner.php';
+
 /**
  * Utility class for constructing certbot command strings.
  */
@@ -34,7 +36,8 @@ class Certbot_Helper {
                 defined( 'PORKPRESS_LOGS_DIR' ) ? PORKPRESS_LOGS_DIR : ''
         ) : ( defined( 'PORKPRESS_LOGS_DIR' ) ? PORKPRESS_LOGS_DIR : '' );
         $hook = dirname( __DIR__ ) . '/bin/porkpress-hook.php';
-        $cmd  = 'certbot certonly --manual --non-interactive --agree-tos --manual-public-ip-logging-ok --preferred-challenges dns';
+        $certbot_cmd = function_exists( '\\get_site_option' ) ? \get_site_option( 'porkpress_ssl_certbot_cmd', 'certbot' ) : 'certbot';
+        $cmd         = escapeshellcmd( $certbot_cmd ) . ' certonly --manual --non-interactive --agree-tos --manual-public-ip-logging-ok --preferred-challenges dns';
         $cmd .= ' --manual-auth-hook ' . escapeshellarg( $hook . ' add' );
         $cmd .= ' --manual-cleanup-hook ' . escapeshellarg( $hook . ' del' );
         $cmd .= ' --deploy-hook ' . escapeshellarg( $hook . ' deploy' );
@@ -76,12 +79,12 @@ class Certbot_Helper {
      * @return array<string, array{domains: array<int, string>}>
      */
     public static function list_certificates(): array {
-        $output = shell_exec( 'certbot certificates 2>/dev/null' );
-        if ( ! is_string( $output ) || '' === trim( $output ) ) {
+        $result = Runner::run( 'certbot certificates 2>/dev/null', 'certbot' );
+        if ( 0 !== $result['code'] || '' === trim( $result['output'] ) ) {
             return array();
         }
 
-        return self::parse_certificates_output( $output );
+        return self::parse_certificates_output( $result['output'] );
     }
 
     /**

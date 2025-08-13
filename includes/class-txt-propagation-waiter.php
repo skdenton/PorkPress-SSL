@@ -9,6 +9,8 @@
 
 namespace PorkPress\SSL;
 
+require_once __DIR__ . '/class-runner.php';
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -87,17 +89,15 @@ class TXT_Propagation_Waiter {
          * @return array<int, string> List of TXT records.
          */
         protected function query_txt( string $name, string $resolver ): array {
-                $cmd = sprintf( 'dig +short @%s TXT %s', escapeshellarg( $resolver ), escapeshellarg( $name ) );
-                $output = array();
-                $status = 1;
-                exec( $cmd, $output, $status );
-                if ( 0 !== $status ) {
-                        $message = sprintf( 'dig command failed for resolver %s (exit code %d)', $resolver, $status );
+                $cmd    = sprintf( 'dig +short @%s TXT %s', escapeshellarg( $resolver ), escapeshellarg( $name ) );
+                $result = Runner::run( $cmd );
+                if ( 0 !== $result['code'] ) {
+                        $message = sprintf( 'dig command failed for resolver %s (exit code %d)', $resolver, $result['code'] );
                         trigger_error( $message, E_USER_WARNING );
                         return array();
                 }
                 $records = array();
-                foreach ( $output as $line ) {
+                foreach ( preg_split( '/\r?\n/', trim( $result['output'] ) ) as $line ) {
                         $line = trim( $line );
                         if ( '' === $line ) {
                                 continue;

@@ -44,6 +44,9 @@ require_once __DIR__ . '/includes/class-txt-propagation-waiter.php';
 require_once __DIR__ . '/includes/class-certbot-helper.php';
 require_once __DIR__ . '/includes/class-renewal-service.php';
 require_once __DIR__ . '/includes/class-notifier.php';
+require_once __DIR__ . '/includes/class-runner.php';
+
+\PorkPress\SSL\Renewal_Service::$runner = array( \PorkPress\SSL\Runner::class, 'run' );
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
         require_once __DIR__ . '/includes/class-cli.php';
@@ -64,15 +67,14 @@ function porkpress_ssl_activate() {
         $warnings = array();
 
        // Verify certbot command.
-       $certbot = trim( shell_exec( 'command -v certbot 2>/dev/null' ) );
-       if ( '' === $certbot ) {
+       $certbot_cmd = get_site_option( 'porkpress_ssl_certbot_cmd', 'certbot' );
+       if ( ! \PorkPress\SSL\Runner::command_exists( $certbot_cmd ) ) {
                $errors[] = __( 'Certbot is required but could not be found.', 'porkpress-ssl' );
                \PorkPress\SSL\Logger::error( 'activation_check', array( 'check' => 'certbot' ), 'missing' );
        }
 
        // Verify dig command.
-       $dig = trim( shell_exec( 'command -v dig 2>/dev/null' ) );
-       if ( '' === $dig ) {
+       if ( ! \PorkPress\SSL\Runner::command_exists( 'dig' ) ) {
                $errors[] = __( 'dig is required but could not be found.', 'porkpress-ssl' );
                \PorkPress\SSL\Logger::error( 'activation_check', array( 'check' => 'dig' ), 'missing' );
        }
