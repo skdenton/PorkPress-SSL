@@ -20,7 +20,7 @@ wp porkpress ssl:renew-all [--staging] [--cert-name="porkpress-network"]
 ```
 ## Stand‑alone certbot hook
 
-`bin/porkbun-hook.php` can be used as the manual authentication and cleanup
+`bin/porkpress-hook.php` can be used as the manual authentication and cleanup
 hooks for Certbot. The script loads WordPress to obtain Porkbun credentials and
 log activity via the plugin's `Logger`.
 
@@ -29,14 +29,16 @@ Example certbot invocation:
 ```
 certbot certonly \
   --manual --preferred-challenges dns \
-  --manual-auth-hook '/path/to/bin/porkbun-hook.php add' \
-  --manual-cleanup-hook '/path/to/bin/porkbun-hook.php del' \
+  --manual-auth-hook '/path/to/bin/porkpress-hook.php add' \
+  --manual-cleanup-hook '/path/to/bin/porkpress-hook.php del' \
   -d example.com
 ```
 
-Certbot sets `CERTBOT_DOMAIN` and `CERTBOT_VALIDATION` which the hook consumes.
-If WordPress is not located automatically, set the environment variable
-`WP_LOAD_PATH` to the directory containing `wp-load.php`.
+Certbot sets `CERTBOT_DOMAIN`, `CERTBOT_VALIDATION` and `CERTBOT_TOKEN` which
+the hook logs. If WordPress is not located automatically, either pass
+`--wp-root=/path/to/wordpress` or set the environment variable `WP_ROOT` or
+`WP_LOAD_PATH` to the directory containing `wp-load.php`. The hook also reads
+configuration from `/etc/default/porkpress-ssl` when present.
 
 ## Porkbun API credentials
 
@@ -67,13 +69,17 @@ cp /path/to/porkpress-ssl/sunrise.php /path/to/wordpress/wp-content/sunrise.php
 
 ## Certificate and state locations
 
-Certificates are stored under `${PORKPRESS_CERT_ROOT}/live/<cert-name>/` and a
-JSON manifest is written to `${PORKPRESS_STATE_ROOT}/manifest.json` describing
-the active certificate. By default these roots are `/etc/letsencrypt` and
-`/var/lib/porkpress-ssl` respectively. They can be customized in `wp-config.php`:
+Certbot's default directories are used so existing lineages can be discovered.
+If customization is required, `PORKPRESS_CERT_ROOT`, `PORKPRESS_WORK_DIR` and
+`PORKPRESS_LOGS_DIR` constants (or corresponding network options) are respected
+and surfaced in health checks. A JSON manifest describing the active
+certificate is written to `${PORKPRESS_STATE_ROOT}/manifest.json` which defaults
+to `/var/lib/porkpress-ssl` and can also be overridden in `wp-config.php`:
 
 ```
 define('PORKPRESS_CERT_ROOT', '/etc/letsencrypt');
+define('PORKPRESS_WORK_DIR', '/var/lib/letsencrypt');
+define('PORKPRESS_LOGS_DIR', '/var/log/letsencrypt');
 define('PORKPRESS_STATE_ROOT', '/var/lib/porkpress-ssl');
 define('PORKPRESS_CERT_NAME', 'porkpress-network');
 ```
