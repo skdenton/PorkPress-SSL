@@ -90,7 +90,7 @@ class RenewalServiceTest extends TestCase {
 
     public function testStagingAddsFlag() {
         $cmd = \PorkPress\SSL\Renewal_Service::build_certbot_command(['example.com'], 'test', true, true);
-        $this->assertStringContainsString('--test-cert', $cmd);
+        $this->assertStringContainsString('--staging', $cmd);
     }
 
     public function testBuildCertbotCommandAddsNetworkWildcard() {

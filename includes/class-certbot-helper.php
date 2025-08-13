@@ -18,7 +18,9 @@ class Certbot_Helper {
      *
      * @param array  $domains  Domains to include.
      * @param string $cert_name Certificate lineage name.
-     * @param bool   $staging  Whether to use staging.
+     * @param bool   $staging  Whether to use staging. Uses Certbot's `--staging` flag
+     *                        to avoid rate limits during testing. See
+     *                        https://eff-certbot.readthedocs.io/en/stable/using.html#staging
      * @param bool   $renewal  Force renewal.
      * @return string
      */
@@ -55,7 +57,7 @@ class Certbot_Helper {
             $cmd .= ' --force-renewal';
         }
         if ( $staging ) {
-            $cmd .= ' --test-cert';
+            $cmd .= ' --staging';
         }
         foreach ( $domains as $domain ) {
             $domain = strtolower( $domain );

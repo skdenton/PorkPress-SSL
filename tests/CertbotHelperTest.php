@@ -10,7 +10,7 @@ class CertbotHelperTest extends TestCase {
 
         $cmd = \PorkPress\SSL\Certbot_Helper::build_command( [ 'example.com', 'www.example.com' ], 'test', true, true );
 
-        $this->assertStringContainsString( '--test-cert', $cmd );
+        $this->assertStringContainsString( '--staging', $cmd );
         $this->assertStringContainsString( '--force-renewal', $cmd );
         $this->assertStringContainsString( '--deploy-hook', $cmd );
         $this->assertStringContainsString( "-d 'example.com'", $cmd );
