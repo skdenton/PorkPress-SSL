@@ -116,6 +116,13 @@ class SSLServiceTest extends TestCase {
             public function __construct() {}
             public function get_aliases( ?int $site_id = null, ?string $domain = null ): array {
                 $this->seen[] = $site_id;
+                if ( null === $site_id ) {
+                    return array(
+                        array( 'domain' => 'example.com' ),
+                        array( 'domain' => 'www.example.com' ),
+                        array( 'domain' => 'foo.com' ),
+                    );
+                }
                 if ( 1 === $site_id ) {
                     return array(
                         array( 'domain' => 'example.com' ),
@@ -150,7 +157,7 @@ class SSLServiceTest extends TestCase {
         $notices = get_site_option( \PorkPress\SSL\Notifier::OPTION );
         $this->assertSame( 'success', $notices[0]['type'] );
 
-        $this->assertSame( [ 1, 2 ], $domains->seen );
+        $this->assertSame( [ null, 1, 2 ], $domains->seen );
         $this->assertSame( [], \PorkPress\SSL\SSL_Service::get_queue() );
     }
 }
