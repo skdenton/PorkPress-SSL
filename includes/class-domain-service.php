@@ -981,7 +981,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
                $this->clear_domain_cache();
                $fqdn = $name ? "{$name}.{$domain}" : $domain;
-               $this->touch_aliases_for_domain( $fqdn );
+               $this->touch_aliases_for_domain( $fqdn, 'active' );
                return true;
        }
 
@@ -1041,7 +1041,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
                $this->clear_domain_cache();
                $fqdn = $name ? "{$name}.{$domain}" : $domain;
-               $this->touch_aliases_for_domain( $fqdn );
+               $this->touch_aliases_for_domain( $fqdn, 'active' );
                return true;
        }
 
@@ -1084,7 +1084,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                }
 
                $this->clear_domain_cache();
-               $this->touch_aliases_for_domain( $domain );
+               $this->touch_aliases_for_domain( $domain, 'inactive' );
                return true;
        }
 
@@ -1093,13 +1093,13 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
         *
         * @param string $domain Domain to match.
         */
-       protected function touch_aliases_for_domain( string $domain ): void {
+       protected function touch_aliases_for_domain( string $domain, string $status = 'active' ): void {
                $aliases = $this->get_aliases();
                $match   = '.' . $domain;
                foreach ( $aliases as $alias ) {
                        $alias_domain = $alias['domain'];
                        if ( $alias_domain === $domain || substr( $alias_domain, -strlen( $match ) ) === $match ) {
-                               $this->update_alias( (int) $alias['site_id'], $alias_domain, array( 'status' => 'active' ) );
+                               $this->update_alias( (int) $alias['site_id'], $alias_domain, array( 'status' => $status ) );
                        }
                }
        }

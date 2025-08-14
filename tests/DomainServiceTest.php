@@ -951,7 +951,7 @@ class DomainServiceTest extends TestCase {
         $service->update_alias( 1, 'sub.example.com', array( 'status' => 'inactive' ) );
         $this->assertTrue( $service->delete_dns_record( 'example.com', 5 ) );
         $alias = $service->get_aliases( null, 'sub.example.com' )[0];
-        $this->assertSame( 'active', $alias['status'] );
+        $this->assertSame( 'inactive', $alias['status'] );
         $this->assertSame( array( 'example.com', 5 ), $client->deleted );
         $this->assertSame( 3, $service->cache_clear_count );
 
