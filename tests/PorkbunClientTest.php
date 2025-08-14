@@ -79,5 +79,43 @@ class PorkbunClientTest extends TestCase {
         $client->retrieve_ssl_bundle( 'example.com' );
         $last = end( $client->plan );
         $this->assertSame( 'ssl/retrieve/example.com', $last['endpoint'] );
+
+        $client->get_record( 'example.com', 5 );
+        $last = end( $client->plan );
+        $this->assertSame( 'dns/retrieve/example.com/5', $last['endpoint'] );
+        $this->assertSame( array(), $last['payload'] );
+
+        $client->create_record( 'example.com', 'a', 'www', '1.2.3.4', 600, 10 );
+        $last = end( $client->plan );
+        $this->assertSame( 'dns/create/example.com', $last['endpoint'] );
+        $this->assertSame(
+            array(
+                'type'    => 'A',
+                'name'    => 'www',
+                'content' => '1.2.3.4',
+                'ttl'     => 600,
+                'prio'    => 10,
+            ),
+            $last['payload']
+        );
+
+        $client->edit_record( 'example.com', 5, 'aaaa', 'www', '1.2.3.5', 600, 20 );
+        $last = end( $client->plan );
+        $this->assertSame( 'dns/edit/example.com/5', $last['endpoint'] );
+        $this->assertSame(
+            array(
+                'type'    => 'AAAA',
+                'name'    => 'www',
+                'content' => '1.2.3.5',
+                'ttl'     => 600,
+                'prio'    => 20,
+            ),
+            $last['payload']
+        );
+
+        $client->delete_record( 'example.com', 5 );
+        $last = end( $client->plan );
+        $this->assertSame( 'dns/delete/example.com/5', $last['endpoint'] );
+        $this->assertSame( array(), $last['payload'] );
     }
 }
