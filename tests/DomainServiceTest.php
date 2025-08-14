@@ -378,54 +378,54 @@ class DomainServiceTest extends TestCase {
     }
 
     public function testCreateRecordAddsWwwCnameForApex() {
-        $service = new class extends \PorkPress\SSL\Domain_Service {
-            public array $calls = array();
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            protected function ensure_dns_record( string $domain, string $name, string $content, int $ttl, string $type, int $site_id ) {
-                $this->calls[] = array( $name, $type, $content );
+            public function retrieve_by_name_type( string $domain, string $name, string $type ) { return array( 'records' => array() ); }
+            public function edit_by_name_type( string $domain, string $name, string $type, string $content, ?int $ttl = null ) { return array( 'status' => 'SUCCESS' ); }
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) { return array( 'status' => 'SUCCESS' ); }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public array $names = array();
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            protected function ensure_dns_record( string $domain, string $content, int $ttl, string $type, int $site_id, ?string $name_override = null ) {
+                $this->names[] = $name_override ?? '';
                 return true;
             }
-            protected function ensure_www_cname( string $domain, int $ttl ) {
-                if ( substr_count( $domain, '.' ) > 1 ) {
-                    return true;
-                }
-                return $this->ensure_dns_record( $domain, 'www', $domain, $ttl, 'CNAME', 0 );
-            }
-            public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
             protected function get_network_ip(): string { return '1.1.1.1'; }
             protected function get_network_ipv6(): string { return ''; }
+            public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
         };
 
         $service->call_create( 'example.com' );
-        $names = array_column( $service->calls, 0 );
-        $this->assertContains( 'www', $names );
+        $this->assertContains( 'www', $service->names );
     }
 
-    public function testCreateRecordSkipsWwwForSubdomain() {
-        $service = new class extends \PorkPress\SSL\Domain_Service {
-            public array $calls = array();
+    public function testCreateRecordAddsWwwCnameForSubdomain() {
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            protected function ensure_dns_record( string $domain, string $name, string $content, int $ttl, string $type, int $site_id ) {
-                $this->calls[] = array( $name, $type, $content );
+            public function retrieve_by_name_type( string $domain, string $name, string $type ) { return array( 'records' => array() ); }
+            public function edit_by_name_type( string $domain, string $name, string $type, string $content, ?int $ttl = null ) { return array( 'status' => 'SUCCESS' ); }
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) { return array( 'status' => 'SUCCESS' ); }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public array $names = array();
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            protected function ensure_dns_record( string $domain, string $content, int $ttl, string $type, int $site_id, ?string $name_override = null ) {
+                $this->names[] = $name_override ?? '';
                 return true;
             }
-            protected function ensure_www_cname( string $domain, int $ttl ) {
-                if ( substr_count( $domain, '.' ) > 1 ) {
-                    return true;
-                }
-                return $this->ensure_dns_record( $domain, 'www', $domain, $ttl, 'CNAME', 0 );
-            }
-            public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
             protected function get_network_ip(): string { return '1.1.1.1'; }
             protected function get_network_ipv6(): string { return ''; }
+            public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
         };
 
         $service->call_create( 'sub.example.com' );
-        $names = array_column( $service->calls, 0 );
-        $this->assertNotContains( 'www', $names );
+        $this->assertContains( 'www.sub', $service->names );
     }
 
-    public function testAttachToSiteCreatesARecord() {
+    public function testAttachToSiteCreatesARecordApex() {
         global $wpdb;
         $wpdb = new MockWpdb();
 
@@ -449,6 +449,32 @@ class DomainServiceTest extends TestCase {
 
         $this->assertTrue( $service->attach_to_site( 'example.com', 1, 600 ) );
         $this->assertSame( ['example.com', '', '1.1.1.1', 600, 'A'], $client->args );
+    }
+
+    public function testAttachToSiteCreatesARecordSubdomain() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        if ( ! function_exists( 'update_site_meta' ) ) {
+            function update_site_meta( $site_id, $key, $value ) {}
+        }
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $args = array();
+            public function __construct() {}
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
+                $this->args = func_get_args();
+                return array( 'status' => 'SUCCESS' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            public function check_dns_health( string $domain ) { return true; }
+        };
+
+        $this->assertTrue( $service->attach_to_site( 'sub.example.com', 1, 600 ) );
+        $this->assertSame( ['example.com', 'sub', '1.1.1.1', 600, 'A'], $client->args );
     }
 
     public function testAttachToSiteReturnsErrorOnApiFailure() {
