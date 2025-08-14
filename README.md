@@ -53,6 +53,11 @@ define('PORKPRESS_API_SECRET', 'sk_...');
 or via the network settings stored in the options `porkpress_ssl_api_key` and
 `porkpress_ssl_api_secret`.
 
+When running the stand-alone Certbot hook, credentials may also be provided via
+environment variables `PORKBUN_API_KEY` and `PORKBUN_API_SECRET` (aliases
+`PORKPRESS_API_KEY` and `PORKPRESS_API_SECRET` are accepted for backward
+compatibility).
+
 ## Enabling `sunrise.php`
 
 To enable sunrise functionality, add the following to `wp-config.php`:
