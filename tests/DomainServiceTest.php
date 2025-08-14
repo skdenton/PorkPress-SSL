@@ -434,28 +434,34 @@ class DomainServiceTest extends TestCase {
         $porkpress_add_www_cname = true;
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $args = array();
             public function __construct() {}
             public function retrieve_by_name_type( string $domain, string $name, string $type ) { throw new \Exception(); }
             public function edit_by_name_type( string $domain, string $name, string $type, string $content, ?int $ttl = null ) { return array( 'status' => 'SUCCESS' ); }
-            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) { return array( 'status' => 'SUCCESS' ); }
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
+                $this->args[] = func_get_args();
+                return array( 'status' => 'SUCCESS' );
+            }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
-            public array $names = array();
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
-            protected function ensure_dns_record( string $domain, string $content, int $ttl, string $type, int $site_id, ?string $name_override = null ) {
-                $this->names[] = $name_override ?? '';
-                return true;
-            }
             protected function get_network_ip(): string { return '1.1.1.1'; }
             protected function get_network_ipv6(): string { return ''; }
             public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
         };
 
         $service->call_create( 'sub.example.com' );
-        $this->assertContains( 'www.sub', $service->names );
 
         $porkpress_add_www_cname = null;
+
+        $this->assertSame(
+            array(
+                array( 'example.com', 'sub', '1.1.1.1', 600, 'A' ),
+                array( 'example.com', 'www.sub', 'sub.example.com', 600, 'CNAME' ),
+            ),
+            $client->args
+        );
     }
 
     public function testAttachToSiteCreatesARecordApex() {
