@@ -38,5 +38,6 @@ class DryRunTest extends TestCase {
         $this->assertSame( 'SUCCESS', $result['status'] );
         $this->assertNotEmpty( $plan );
         $this->assertSame( 'domain/listAll', $plan[0]['endpoint'] );
+        $this->assertSame( 'yes', $plan[0]['payload']['includeLabels'] );
     }
 }

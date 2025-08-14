@@ -90,7 +90,8 @@ class Porkbun_Client {
                $chunk_start = (int) ( floor( $offset / 1000 ) * 1000 );
 
                $result = $this->request( 'domain/listAll', [
-                       'start' => (string) $chunk_start,
+                       'start'         => (string) $chunk_start,
+                       'includeLabels' => 'yes',
                ] );
 
                if ( $result instanceof Porkbun_Client_Error ) {
