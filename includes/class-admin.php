@@ -1148,6 +1148,13 @@ update_site_option( 'porkpress_ssl_state_root', sanitize_text_field( wp_unslash(
 $network_wildcard = isset( $_POST['porkpress_network_wildcard'] ) ? 1 : 0;
 update_site_option( 'porkpress_ssl_network_wildcard', $network_wildcard );
 
+            if ( isset( $_POST['porkpress_prod_server'] ) ) {
+                update_site_option( 'porkpress_ssl_prod_server_ip', sanitize_text_field( wp_unslash( $_POST['porkpress_prod_server'] ) ) );
+            }
+            if ( isset( $_POST['porkpress_dev_server'] ) ) {
+                update_site_option( 'porkpress_ssl_dev_server_ip', sanitize_text_field( wp_unslash( $_POST['porkpress_dev_server'] ) ) );
+            }
+
 $cert_name = get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
 $state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
@@ -1208,6 +1215,8 @@ $txt_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_txt_timeout', 60
 $txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) ) );
 $ipv4_override = get_site_option( 'porkpress_ssl_ipv4_override', '' );
 $ipv6_override = get_site_option( 'porkpress_ssl_ipv6_override', '' );
+$prod_server   = get_site_option( 'porkpress_ssl_prod_server_ip', '' );
+$dev_server    = get_site_option( 'porkpress_ssl_dev_server_ip', '' );
 $cert_name = $cert_name_locked ? PORKPRESS_CERT_NAME : get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = $cert_root_locked ? PORKPRESS_CERT_ROOT : get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
 $state_root = $state_root_locked ? PORKPRESS_STATE_ROOT : get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
@@ -1305,6 +1314,14 @@ echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_ipv6">' . esc_html__( 'Network IPv6 Override', 'porkpress-ssl' ) . '</label></th>';
 echo '<td><input name="porkpress_ipv6" type="text" id="porkpress_ipv6" value="' . esc_attr( $ipv6_override ) . '" class="regular-text" /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_prod_server">' . esc_html__( 'Production Server', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_prod_server" type="text" id="porkpress_prod_server" value="' . esc_attr( $prod_server ) . '" class="regular-text" /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_dev_server">' . esc_html__( 'Development Server', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_dev_server" type="text" id="porkpress_dev_server" value="' . esc_attr( $dev_server ) . '" class="regular-text" /></td>';
 echo '</tr>';
 echo '<tr>';
         echo '<th scope="row">' . esc_html__( 'Automatic Reconciliation', 'porkpress-ssl' ) . '</th>';

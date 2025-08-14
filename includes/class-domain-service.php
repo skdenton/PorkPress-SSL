@@ -141,6 +141,15 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                        if ( '' !== $v6 ) {
                                $expected_ipv6 = array_filter( preg_split( '/[,\s]+/', $v6 ) );
                        }
+                       $prod = trim( (string) get_site_option( 'porkpress_ssl_prod_server_ip', '' ) );
+                       if ( '' !== $prod ) {
+                               $expected_ipv4[] = $prod;
+                       }
+                       $dev = trim( (string) get_site_option( 'porkpress_ssl_dev_server_ip', '' ) );
+                       if ( '' !== $dev ) {
+                               $expected_ipv4[] = $dev;
+                       }
+                       $expected_ipv4 = array_filter( array_unique( $expected_ipv4 ) );
                }
 
                if ( empty( $expected_ipv4 ) && function_exists( 'gethostbynamel' ) ) {
