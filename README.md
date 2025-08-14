@@ -58,6 +58,44 @@ environment variables `PORKBUN_API_KEY` and `PORKBUN_API_SECRET` (aliases
 `PORKPRESS_API_KEY` and `PORKPRESS_API_SECRET` are accepted for backward
 compatibility).
 
+## DNS records
+
+For each domain attached to the network the plugin splits the fully qualified
+name into the zone and any subdomain labels. Domains with only two labels are
+treated as apex domains (for example `example.com`), while domains with more
+labels are treated as subdomains (for example `blog.example.com`). The records
+it manages differ for each case:
+
+* **Apex domain** – `A` and `AAAA` records are created pointing to the
+  network's IPv4 and IPv6 addresses. A `www` `CNAME` is also ensured so that
+  `www.example.com` resolves to the apex.
+* **Subdomain** – `A` and `AAAA` records are created for the subdomain. No
+  `www` alias is added by default.
+
+### Optional `www` CNAMEs for subdomains
+
+If a `www` alias should be created for a subdomain such as
+`www.blog.example.com`, enable the filter:
+
+```php
+add_filter( 'porkpress_ssl_add_www_cname', '__return_true' );
+```
+
+Explicitly disabling the alias can be done with:
+
+```php
+add_filter( 'porkpress_ssl_add_www_cname', '__return_false' );
+```
+
+The filter receives the current setting and the full domain, allowing
+conditional logic:
+
+```php
+add_filter( 'porkpress_ssl_add_www_cname', function( $enabled, $domain ) {
+    return $domain === 'shop.example.com';
+}, 10, 2 );
+```
+
 ## Enabling `sunrise.php`
 
 To enable sunrise functionality, add the following to `wp-config.php`:
