@@ -79,7 +79,7 @@ class Porkbun_Client {
         * "start" offset for paging. The client performs slicing to honour the
         * requested per-page size while only fetching the necessary chunk.
         */
-       public function listDomains( int $page = 1, int $per_page = 100 ) {
+       public function list_domains( int $page = 1, int $per_page = 100 ) {
                $offset      = max( 0, ( $page - 1 ) * $per_page );
                $chunk_start = (int) ( floor( $offset / 1000 ) * 1000 );
 
@@ -101,7 +101,7 @@ class Porkbun_Client {
        /**
         * Retrieve details for a single domain.
         */
-       public function getDomain( string $domain ) {
+       public function get_domain( string $domain ) {
                $domain = strtolower( $domain );
 
                return $this->request( "domain/get/{$domain}", [] );
@@ -110,7 +110,7 @@ class Porkbun_Client {
        /**
         * Check whether a domain is available for registration.
         */
-       public function checkDomain( string $domain ) {
+       public function check_domain( string $domain ) {
                $domain = strtolower( $domain );
 
                return $this->request( "domain/checkDomain/{$domain}", [] );
@@ -119,14 +119,17 @@ class Porkbun_Client {
         /**
          * Retrieve DNS records for a domain.
  */
-        public function getRecords( string $domain ) {
+        public function get_records( string $domain ) {
                 return $this->request( "dns/retrieve/{$domain}", [] );
         }
 
 	/**
 	 * Create a TXT record.
 	 */
-	public function createTxtRecord( string $domain, string $name, string $content, int $ttl = 300 ) {
+	public function create_txt_record( string $domain, string $name, string $content, int $ttl = 300 ) {
+		$name    = sanitize_text_field( $name );
+		$content = sanitize_text_field( $content );
+
 		return $this->request( "dns/create/{$domain}", [
 			'type'	  => 'TXT',
 			'name'	  => $name,
@@ -138,14 +141,17 @@ class Porkbun_Client {
 	/**
 	 * Delete a TXT record by ID.
 	 */
-	public function deleteTxtRecord( string $domain, int $record_id ) {
-		return $this->deleteRecord( $domain, $record_id );
+	public function delete_txt_record( string $domain, int $record_id ) {
+		return $this->delete_record( $domain, $record_id );
 	}
 
         /**
          * Create an A or AAAA record.
          */
-        public function createARecord( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+        public function create_a_record( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+		$name    = sanitize_text_field( $name );
+		$content = sanitize_text_field( $content );
+
                 return $this->request( "dns/create/{$domain}", [
                         'type'    => $type,
                         'name'    => $name,
@@ -157,14 +163,17 @@ class Porkbun_Client {
        /**
         * Retrieve a single DNS record by ID.
         */
-       public function getRecord( string $domain, int $record_id ) {
+       public function get_record( string $domain, int $record_id ) {
                return $this->request( "dns/retrieve/{$domain}/{$record_id}", [] );
        }
 
        /**
         * Create a DNS record of any type.
         */
-       public function createRecord( string $domain, string $type, string $name, string $content, int $ttl = 300 ) {
+       public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 300 ) {
+		$name    = sanitize_text_field( $name );
+		$content = sanitize_text_field( $content );
+
                return $this->request( "dns/create/{$domain}", [
                        'type'    => $type,
                        'name'    => $name,
@@ -176,7 +185,10 @@ class Porkbun_Client {
        /**
         * Edit a DNS record by ID.
         */
-       public function editRecord( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 300 ) {
+       public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 300 ) {
+		$name    = sanitize_text_field( $name );
+		$content = sanitize_text_field( $content );
+
                return $this->request( "dns/edit/{$domain}/{$record_id}", [
                        'type'    => $type,
                        'name'    => $name,
@@ -188,7 +200,9 @@ class Porkbun_Client {
        /**
         * Retrieve DNS records by name and type.
         */
-       public function retrieveByNameType( string $domain, string $name, string $type ) {
+       public function retrieve_by_name_type( string $domain, string $name, string $type ) {
+		$name = sanitize_text_field( $name );
+
                return $this->request( "dns/retrieveByNameType/{$domain}", [
                        'name' => $name,
                        'type' => $type,
@@ -198,7 +212,10 @@ class Porkbun_Client {
        /**
         * Edit or create a DNS record by name and type.
         */
-       public function editByNameType( string $domain, string $name, string $type, string $content, int $ttl = 300 ) {
+       public function edit_by_name_type( string $domain, string $name, string $type, string $content, int $ttl = 300 ) {
+		$name    = sanitize_text_field( $name );
+		$content = sanitize_text_field( $content );
+
                return $this->request( "dns/editByNameType/{$domain}", [
                        'name'    => $name,
                        'type'    => $type,
@@ -210,7 +227,7 @@ class Porkbun_Client {
        /**
         * Retrieve authoritative nameservers for a domain.
         */
-       public function getNs( string $domain ) {
+       public function get_ns( string $domain ) {
                $domain = strtolower( $domain );
                return $this->request( "domain/getNs/{$domain}", [] );
        }
@@ -218,7 +235,7 @@ class Porkbun_Client {
         /**
          * Delete a record by ID.
          */
-        public function deleteRecord( string $domain, int $record_id ) {
+        public function delete_record( string $domain, int $record_id ) {
                 return $this->request( "dns/delete/{$domain}/{$record_id}", [] );
 	}
 
@@ -233,7 +250,7 @@ class Porkbun_Client {
 
 		while ( true ) {
 			$attempt++;
-			$response = $this->performHttpRequest( $url, $payload, $method );
+			$response = $this->perform_http_request( $url, $payload, $method );
 			$status	  = $response['status'];
 			$body	  = $response['body'];
 
@@ -247,7 +264,7 @@ class Porkbun_Client {
 			}
 
 			if ( ( 429 === $status || ( $status >= 500 && $status < 600 ) ) && $attempt < $this->max_retries ) {
-				$delay = $this->calculateBackoff( $attempt );
+				$delay = $this->calculate_backoff( $attempt );
 				$this->sleep( $delay );
 				continue;
 			}
@@ -266,7 +283,7 @@ class Porkbun_Client {
         /**
          * Low-level HTTP request using WP HTTP API if available, falling back to cURL.
          */
-        protected function performHttpRequest( string $url, array $payload, string $method ): array {
+        protected function perform_http_request( string $url, array $payload, string $method ): array {
                 if ( function_exists( 'wp_remote_request' ) ) {
                         $args = [
                                 'method'  => $method,
@@ -294,7 +311,7 @@ class Porkbun_Client {
                 curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
                 curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, $method );
                 curl_setopt( $ch, CURLOPT_HTTPHEADER, [ 'Content-Type: application/json' ] );
-                curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $payload ) );
+                curl_setopt( $ch, CURLOPT_POSTFIELDS, ( function_exists( 'wp_json_encode' ) ? wp_json_encode( $payload ) : json_encode( $payload ) ) );
                 $body = curl_exec( $ch );
                 if ( false === $body ) {
                         $error = curl_error( $ch );
@@ -309,7 +326,7 @@ class Porkbun_Client {
 	/**
 	 * Calculate exponential backoff with jitter.
 	 */
-	protected function calculateBackoff( int $attempt ): float {
+	protected function calculate_backoff( int $attempt ): float {
 		$base = $this->base_delay * pow( 2, $attempt - 1 );
 		return $base + $this->jitter( $base );
 	}

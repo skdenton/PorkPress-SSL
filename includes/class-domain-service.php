@@ -230,7 +230,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
        }
 
        protected function dig_dns_records( string $domain ): array {
-               $ns_result = $this->client->getNs( $domain );
+               $ns_result = $this->client->get_ns( $domain );
                $nameservers = array();
                if ( is_array( $ns_result ) && isset( $ns_result['ns'] ) && is_array( $ns_result['ns'] ) ) {
                        $nameservers = $ns_result['ns'];
@@ -442,7 +442,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                 );
             }
 
-            $result = $this->client->listDomains( $current_page, $per_page );
+            $result = $this->client->list_domains( $current_page, $per_page );
 
             if ( $result instanceof Porkbun_Client_Error ) {
                 Notifier::notify( 'error', __( 'Porkbun API error', 'porkpress-ssl' ), $result->message );
@@ -502,7 +502,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
      * @return array|Porkbun_Client_Error
      */
     public function check_domain( string $domain ) {
-        $result = $this->client->checkDomain( $domain );
+        $result = $this->client->check_domain( $domain );
         if ( $result instanceof Porkbun_Client_Error ) {
             Notifier::notify( 'error', __( 'Porkbun API error', 'porkpress-ssl' ), $result->message );
         }
@@ -674,21 +674,21 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
         * Ensure a DNS record exists with the desired content.
         */
        protected function ensure_dns_record( string $domain, string $name, string $content, int $ttl, string $type, int $site_id ) {
-               if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieveByNameType' ) || ! method_exists( $this->client, 'editByNameType' ) ) {
-                       if ( isset( $this->client ) && method_exists( $this->client, 'createARecord' ) ) {
-                               return $this->client->createARecord( $domain, $name, $content, $ttl, $type );
+               if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieve_by_name_type' ) || ! method_exists( $this->client, 'edit_by_name_type' ) ) {
+                       if ( isset( $this->client ) && method_exists( $this->client, 'create_a_record' ) ) {
+                               return $this->client->create_a_record( $domain, $name, $content, $ttl, $type );
                        }
                        return true;
                }
 
                try {
-                       $existing = $this->client->retrieveByNameType( $domain, $name, $type );
+                       $existing = $this->client->retrieve_by_name_type( $domain, $name, $type );
                } catch ( \Throwable $e ) {
                        $existing = new Porkbun_Client_Error( 'client_error', $e->getMessage() );
                }
                if ( $existing instanceof Porkbun_Client_Error ) {
-                       if ( isset( $this->client ) && method_exists( $this->client, 'createARecord' ) ) {
-                               $result = $this->client->createARecord( $domain, $name, $content, $ttl, $type );
+                       if ( isset( $this->client ) && method_exists( $this->client, 'create_a_record' ) ) {
+                               $result = $this->client->create_a_record( $domain, $name, $content, $ttl, $type );
                                if ( $result instanceof Porkbun_Client_Error ) {
                                        \PorkPress\SSL\Logger::error(
                                                'create_a_record',
@@ -719,9 +719,9 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                }
 
                if ( is_array( $existing ) && ! empty( $existing['records'] ) ) {
-                       $result = $this->client->editByNameType( $domain, $name, $type, $content, $ttl );
+                       $result = $this->client->edit_by_name_type( $domain, $name, $type, $content, $ttl );
                } else {
-                       $result = $this->client->createARecord( $domain, $name, $content, $ttl, $type );
+                       $result = $this->client->create_a_record( $domain, $name, $content, $ttl, $type );
                }
                if ( $result instanceof Porkbun_Client_Error ) {
                        \PorkPress\SSL\Logger::error(
@@ -750,12 +750,12 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                        return true;
                }
 
-               if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieveByNameType' ) || ! method_exists( $this->client, 'editByNameType' ) ) {
+               if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieve_by_name_type' ) || ! method_exists( $this->client, 'edit_by_name_type' ) ) {
                        return true;
                }
 
                try {
-                       $this->client->retrieveByNameType( $domain, 'www', 'CNAME' );
+                       $this->client->retrieve_by_name_type( $domain, 'www', 'CNAME' );
                } catch ( \Throwable $e ) {
                        return true;
                }
@@ -775,7 +775,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                $ipv4 = $this->get_network_ip();
                $ipv6 = $this->get_network_ipv6();
 
-               $records = $this->client->getRecords( $domain );
+               $records = $this->client->get_records( $domain );
                if ( $records instanceof Porkbun_Client_Error ) {
                        \PorkPress\SSL\Logger::error( 'delete_a_record', array( 'domain' => $domain, 'site_id' => $site_id ), $records->message );
                        return $records;
@@ -790,7 +790,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                        $content = $rec['content'] ?? '';
 
                        if ( ( 'A' === $type && $ipv4 && $content === $ipv4 ) || ( 'AAAA' === $type && $ipv6 && $content === $ipv6 ) ) {
-                               $del = $this->client->deleteRecord( $domain, (int) $rec['id'] );
+                               $del = $this->client->delete_record( $domain, (int) $rec['id'] );
                                if ( $del instanceof Porkbun_Client_Error ) {
                                        \PorkPress\SSL\Logger::error( 'delete_a_record', array( 'domain' => $domain, 'site_id' => $site_id, 'record_id' => $rec['id'] ), $del->message );
                                        return $del;
@@ -1194,7 +1194,7 @@ UNIQUE KEY domain (domain)
    * @return bool True if the domain exists and is active, false otherwise.
    */
   public function is_domain_active( string $domain ): bool {
-       $result = $this->client->getDomain( $domain );
+       $result = $this->client->get_domain( $domain );
 
        if ( $result instanceof Porkbun_Client_Error ) {
                // If the API fails, assume active to avoid false positives.

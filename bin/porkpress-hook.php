@@ -119,7 +119,7 @@ if ( empty($api_key) || empty($api_secret) ) {
 $client = new Porkbun_Client($api_key, $api_secret);
 
 if ( 'add' === $action || 'auth' === $action ) {
-    $result = $client->createTxtRecord($zone, $record_name, $validation, 600);
+    $result = $client->create_txt_record($zone, $record_name, $validation, 600);
     if ( $result instanceof Porkbun_Client_Error ) {
         Logger::error('certbot_hook', ['action' => 'add', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], $result->message);
         fwrite(STDERR, "{$result->message}\n");
@@ -127,7 +127,7 @@ if ( 'add' === $action || 'auth' === $action ) {
     }
     $timeout   = max( 1, (int) get_site_option( 'porkpress_ssl_txt_timeout', 600 ) );
     $interval  = max( 1, (int) get_site_option( 'porkpress_ssl_txt_interval', 30 ) );
-    $ns_result = $client->getNs( $zone );
+    $ns_result = $client->get_ns( $zone );
     $nameservers = array();
     if ( is_array( $ns_result ) && isset( $ns_result['ns'] ) && is_array( $ns_result['ns'] ) ) {
         $nameservers = $ns_result['ns'];
@@ -170,7 +170,7 @@ if ( 'deploy' === $action || 'renew' === $action ) {
 }
 
 // Deletion path.
-$records = $client->getRecords($zone);
+$records = $client->get_records($zone);
 if ( $records instanceof Porkbun_Client_Error ) {
     Logger::error('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'token' => $token], $records->message);
     fwrite(STDERR, "{$records->message}\n");
@@ -179,7 +179,7 @@ if ( $records instanceof Porkbun_Client_Error ) {
 $deleted = false;
 foreach ( $records['records'] ?? [] as $rec ) {
     if ( 'TXT' === ($rec['type'] ?? '') && $rec['name'] === $record_name && ($validation ? $rec['content'] === $validation : true) ) {
-        $del = $client->deleteRecord($zone, (int) $rec['id']);
+        $del = $client->delete_record($zone, (int) $rec['id']);
         if ( $del instanceof Porkbun_Client_Error ) {
             Logger::error('certbot_hook', ['action' => 'del', 'domain' => $domain, 'zone' => $zone, 'name' => $record_name, 'id' => $rec['id'], 'token' => $token], $del->message);
             fwrite(STDERR, "{$del->message}\n");

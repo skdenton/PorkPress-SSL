@@ -51,10 +51,10 @@ class ReconcilerTest extends TestCase {
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            public function listDomains( int $page = 1, int $per_page = 100 ) {
+            public function list_domains( int $page = 1, int $per_page = 100 ) {
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
-            public function getDomain( string $domain ) {
+            public function get_domain( string $domain ) {
                 return [ 'status' => 'SUCCESS', 'domain' => [ 'status' => 'INACTIVE' ] ];
             }
         };
@@ -97,7 +97,7 @@ class ReconcilerTest extends TestCase {
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            public function listDomains( int $page = 1, int $per_page = 100 ) {
+            public function list_domains( int $page = 1, int $per_page = 100 ) {
                 if ( $page > 1 ) {
                     return array( 'status' => 'SUCCESS', 'domains' => array() );
                 }
@@ -153,7 +153,7 @@ class ReconcilerTest extends TestCase {
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            public function listDomains( int $page = 1, int $per_page = 100 ) {
+            public function list_domains( int $page = 1, int $per_page = 100 ) {
                 if ( $page > 1 ) {
                     return array( 'status' => 'SUCCESS', 'domains' => array() );
                 }
