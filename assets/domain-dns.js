@@ -7,21 +7,84 @@ jQuery( function ( $ ) {
         }
     }
 
+    /**
+     * Escape potentially unsafe characters for string concatenation.
+     *
+     * @param {string} str String to escape.
+     * @return {string} Escaped string.
+     */
+    function escapeHtml( str ) {
+        return $( '<div>' ).text( str ).html();
+    }
+
+    /**
+     * Sanitize field values prior to DOM insertion.
+     *
+     * @param {string|number} value Value to sanitize.
+     * @return {string} Sanitized string.
+     */
+    function sanitizeField( value ) {
+        return $( '<div>' ).text( value == null ? '' : value ).text();
+    }
+
     function render( records ) {
         var $tbody = $( '#porkpress-dns-records tbody' );
         $tbody.empty();
+
         records.forEach( function ( r ) {
-            var row = '<tr data-id="' + r.id + '">' +
-                '<td><input type="text" class="dns-type" value="' + r.type + '" /></td>' +
-                '<td><input type="text" class="dns-name" value="' + r.name + '" /></td>' +
-                '<td><input type="text" class="dns-content" value="' + r.content + '" /></td>' +
-                '<td><input type="number" class="dns-ttl" value="' + r.ttl + '" /></td>' +
-                '<td><button class="button dns-update">' + __( 'Update', 'porkpress-ssl' ) + '</button> ' +
-                '<button class="button dns-delete">' + __( 'Delete', 'porkpress-ssl' ) + '</button></td>' +
-                '</tr>';
-            $tbody.append( row );
+            var $tr = $( '<tr>' ).attr( 'data-id', r.id );
+
+            $( '<td>' ).append(
+                $( '<input>', { type: 'text', 'class': 'dns-type' } )
+                    .val( sanitizeField( r.type ) )
+            ).appendTo( $tr );
+
+            $( '<td>' ).append(
+                $( '<input>', { type: 'text', 'class': 'dns-name' } )
+                    .val( sanitizeField( r.name ) )
+            ).appendTo( $tr );
+
+            $( '<td>' ).append(
+                $( '<input>', { type: 'text', 'class': 'dns-content' } )
+                    .val( sanitizeField( r.content ) )
+            ).appendTo( $tr );
+
+            $( '<td>' ).append(
+                $( '<input>', { type: 'number', 'class': 'dns-ttl' } )
+                    .val( sanitizeField( r.ttl ) )
+            ).appendTo( $tr );
+
+            var $actions = $( '<td>' );
+            $( '<button>', { 'class': 'button dns-update' } )
+                .text( __( 'Update', 'porkpress-ssl' ) )
+                .appendTo( $actions );
+            $( '<button>', { 'class': 'button dns-delete' } )
+                .text( __( 'Delete', 'porkpress-ssl' ) )
+                .appendTo( $actions );
+            $tr.append( $actions );
+
+            $tbody.append( $tr );
         } );
-        $tbody.append( '<tr class="dns-add"><td><input type="text" class="dns-type" /></td><td><input type="text" class="dns-name" /></td><td><input type="text" class="dns-content" /></td><td><input type="number" class="dns-ttl" value="300" /></td><td><button class="button dns-add-btn">' + __( 'Add', 'porkpress-ssl' ) + '</button></td></tr>' );
+
+        var $addRow = $( '<tr>' ).addClass( 'dns-add' );
+        $( '<td>' ).append(
+            $( '<input>', { type: 'text', 'class': 'dns-type' } )
+        ).appendTo( $addRow );
+        $( '<td>' ).append(
+            $( '<input>', { type: 'text', 'class': 'dns-name' } )
+        ).appendTo( $addRow );
+        $( '<td>' ).append(
+            $( '<input>', { type: 'text', 'class': 'dns-content' } )
+        ).appendTo( $addRow );
+        $( '<td>' ).append(
+            $( '<input>', { type: 'number', 'class': 'dns-ttl' } ).val( 300 )
+        ).appendTo( $addRow );
+        var $addActions = $( '<td>' );
+        $( '<button>', { 'class': 'button dns-add-btn' } )
+            .text( __( 'Add', 'porkpress-ssl' ) )
+            .appendTo( $addActions );
+        $addRow.append( $addActions );
+        $tbody.append( $addRow );
     }
 
     function handleError( err ) {
