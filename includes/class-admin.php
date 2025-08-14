@@ -683,29 +683,29 @@ class Admin {
                                $toggle = empty( $records ) ? '' : '<button type="button" class="porkpress-dns-toggle dashicons dashicons-arrow-right" aria-expanded="false"></button> ';
                                $link   = esc_url( add_query_arg( array( 'domain' => $name ) ) );
                                echo '<td>' . $toggle . '<a href="' . $link . '">' . esc_html( $name ) . '</a></td>';
-                               $site_cell = '&mdash;';
-                               $key       = strtolower( $name );
-                               if ( isset( $alias_map[ $key ] ) ) {
-                                       $site_id = (int) $alias_map[ $key ]['site_id'];
-                                       $site    = get_site( $site_id );
-                                       if ( $site ) {
-                                               $site_name = get_blog_option( $site_id, 'blogname' );
-                                               $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
-                                               $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
-                                       }
-                               } elseif ( ! empty( $records ) ) {
-                                       foreach ( $records as $rec ) {
-                                               $target = strtolower( $rec['content'] ?? '' );
-                                               if ( isset( $site_hosts[ $target ] ) ) {
-                                                       $site     = $site_hosts[ $target ];
-                                                       $site_id  = (int) $site->blog_id;
-                                                       $site_name = get_blog_option( $site_id, 'blogname' );
-                                                       $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
-                                                       $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
-                                                       break;
-                                               }
-                                       }
-                               }
+                              $site_cell = '&mdash;';
+                              $alias     = $service->get_aliases( null, $name );
+                              if ( ! empty( $alias ) ) {
+                                      $site_id = (int) $alias[0]['site_id'];
+                                      $site    = get_site( $site_id );
+                                      if ( $site ) {
+                                              $site_name = get_blog_option( $site_id, 'blogname' );
+                                              $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
+                                              $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
+                                      }
+                              } elseif ( ! empty( $records ) ) {
+                                      foreach ( $records as $rec ) {
+                                              $target = strtolower( $rec['content'] ?? '' );
+                                              if ( isset( $site_hosts[ $target ] ) ) {
+                                                      $site     = $site_hosts[ $target ];
+                                                      $site_id  = (int) $site->blog_id;
+                                                      $site_name = get_blog_option( $site_id, 'blogname' );
+                                                      $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
+                                                      $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
+                                                      break;
+                                              }
+                                      }
+                              }
                                echo '<td>' . $site_cell . '</td>';
                                echo '<td>' . esc_html( $expiry ) . '</td>';
                                echo '<td>' . esc_html( $dns_status ) . '</td>';
