@@ -436,10 +436,23 @@ $paths = array(
 );
 if ( ! is_dir( $state_root ) ) {
 if ( function_exists( 'wp_mkdir_p' ) ) {
-wp_mkdir_p( $state_root );
-} else {
-mkdir( $state_root, 0777, true );
-}
+        $created = wp_mkdir_p( $state_root );
+    } else {
+        $mode    = function_exists( 'apply_filters' )
+            ? (int) apply_filters( 'porkpress_ssl_state_dir_mode', 0755 )
+            : 0755;
+        $created = @mkdir( $state_root, $mode, true );
+    }
+    if ( ! $created ) {
+        $err = error_get_last();
+        Logger::error( 'mkdir_state_root', array( 'path' => $state_root, 'error' => $err['message'] ?? '' ), 'mkdir failed' );
+        \PorkPress\SSL\Notifier::notify(
+            'error',
+            __( 'SSL state directory creation failed', 'porkpress-ssl' ),
+            sprintf( __( 'Could not create directory %s: %s', 'porkpress-ssl' ), $state_root, $err['message'] ?? '' )
+        );
+        return null;
+    }
 }
 $manifest = array(
 'cert_name'  => $cert_name,
