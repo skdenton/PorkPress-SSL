@@ -488,6 +488,16 @@ class Admin {
                        $alias_map[ strtolower( $alias['domain'] ) ] = $alias;
                }
 
+               $site_list  = get_sites( array( 'number' => 0 ) );
+               $site_hosts = array();
+               $parse      = function_exists( 'wp_parse_url' ) ? 'wp_parse_url' : 'parse_url';
+               foreach ( $site_list as $s ) {
+                       $host = $parse( get_site_url( (int) $s->blog_id ), PHP_URL_HOST );
+                       if ( $host ) {
+                               $site_hosts[ strtolower( $host ) ] = $s;
+                       }
+               }
+
                $result = $service->list_domains();
                 if ( $result instanceof Porkbun_Client_Error ) {
                         $message = $result->message;
@@ -559,6 +569,7 @@ class Admin {
                        'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                        'nonce'   => wp_create_nonce( 'porkpress_ssl_bulk_action' ),
                ) );
+               wp_enqueue_script( 'porkpress-domain-dns', plugins_url( '../assets/domain-dns.js', __FILE__ ), array( 'jquery' ), PORKPRESS_SSL_VERSION, true );
 
                echo '<form id="porkpress-domain-actions" method="post">';
                echo '<table class="widefat fixed striped">';
@@ -573,14 +584,16 @@ class Admin {
                 if ( empty( $domains ) ) {
                echo '<tr><td colspan="5">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
                 } else {
-                        foreach ( $domains as $domain ) {
+                       foreach ( $domains as $domain ) {
                                $name       = $domain['domain'] ?? $domain['name'] ?? '';
                                $expiry     = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
                                $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
+                               $records    = $domain['dns'] ?? array();
 
                                echo '<tr>';
                                echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
-                               echo '<td>' . esc_html( $name ) . '</td>';
+                               $toggle = empty( $records ) ? '' : '<button type="button" class="porkpress-dns-toggle dashicons dashicons-arrow-right" aria-expanded="false"></button> ';
+                               echo '<td>' . $toggle . esc_html( $name ) . '</td>';
                                $site_cell = '&mdash;';
                                $key       = strtolower( $name );
                                if ( isset( $alias_map[ $key ] ) ) {
@@ -591,11 +604,37 @@ class Admin {
                                                $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
                                                $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
                                        }
+                               } elseif ( ! empty( $records ) ) {
+                                       foreach ( $records as $rec ) {
+                                               $target = strtolower( $rec['content'] ?? '' );
+                                               if ( isset( $site_hosts[ $target ] ) ) {
+                                                       $site     = $site_hosts[ $target ];
+                                                       $site_id  = (int) $site->blog_id;
+                                                       $site_name = get_blog_option( $site_id, 'blogname' );
+                                                       $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
+                                                       $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
+                                                       break;
+                                               }
+                                       }
                                }
                                echo '<td>' . $site_cell . '</td>';
                                echo '<td>' . esc_html( $expiry ) . '</td>';
                                echo '<td>' . esc_html( $dns_status ) . '</td>';
                                echo '</tr>';
+
+                               if ( ! empty( $records ) ) {
+                                       echo '<tr class="porkpress-dns-details" style="display:none;"><td colspan="5">';
+                                       echo '<table class="widefat">';
+                                       echo '<thead><tr><th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Content', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
+                                       foreach ( $records as $rec ) {
+                                               $type    = $rec['type'] ?? '';
+                                               $rname   = $rec['name'] ?? '';
+                                               $content = $rec['content'] ?? '';
+                                               echo '<tr><td>' . esc_html( $type ) . '</td><td>' . esc_html( $rname ) . '</td><td>' . esc_html( $content ) . '</td></tr>';
+                                       }
+                                       echo '</tbody></table>';
+                                       echo '</td></tr>';
+                               }
                        }
                }
 
@@ -607,7 +646,6 @@ class Admin {
                echo '<option value="detach">' . esc_html__( 'Detach from site', 'porkpress-ssl' ) . '</option>';
                echo '</select> ';
                echo '<input type="text" name="site_name" class="regular-text" list="porkpress-site-list" placeholder="' . esc_attr__( 'Site Name', 'porkpress-ssl' ) . '" /> ';
-               $site_list = get_sites( array( 'number' => 0 ) );
                echo '<datalist id="porkpress-site-list">';
                foreach ( $site_list as $s ) {
                        $label = get_blog_option( (int) $s->blog_id, 'blogname' );

@@ -423,6 +423,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
     /**
      * Refresh domain list from Porkbun and store in cache.
+     * Includes DNS records for each root domain.
      *
      * @param int $page     Page number to start from.
      * @param int $per_page Domains per page.
@@ -487,24 +488,24 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
             $current_page++;
         } while ( ! empty( $domains ) );
 
-        $final = array(
-            'status'       => $status,
-            'root_domains' => $all_domains,
-            'domains'      => $all_domains,
-        );
-
         $extra = array();
-        foreach ( $all_domains as $domain_info ) {
+        foreach ( $all_domains as &$domain_info ) {
             $root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
             if ( ! $root ) {
+                $domain_info['dns'] = array();
                 continue;
             }
+
             $records = $this->client->get_records( $root );
             if ( $records instanceof Porkbun_Client_Error ) {
+                $domain_info['dns'] = array();
                 continue;
             }
+
+            $domain_info['dns'] = $records['records'] ?? array();
+
             $seen = array();
-            foreach ( $records['records'] ?? array() as $rec ) {
+            foreach ( $domain_info['dns'] as $rec ) {
                 $name = $rec['name'] ?? '';
                 if ( '' === $name || '@' === $name ) {
                     continue;
@@ -522,7 +523,13 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                 );
             }
         }
-        $final['domains'] = array_merge( $final['domains'], $extra );
+        unset( $domain_info );
+
+        $final = array(
+            'status'       => $status,
+            'root_domains' => $all_domains,
+            'domains'      => array_merge( $all_domains, $extra ),
+        );
 
         $this->domain_list_cache = $final;
 
