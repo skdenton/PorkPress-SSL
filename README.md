@@ -165,6 +165,8 @@ alias table automatically. When a site is created, deleted, archived or
 restored the plugin adjusts aliases and queues certificate issuance so SSL
 coverage remains in sync with the network.
 
+When assigning domains to sites via the Domain Aliases screen, the domain picker lists only Porkbun domains that are not already mapped.
+
 ## Debian 11/Apache example
 
 On Debian 11 with Apache, WordPress is typically installed under `/var/www/html`
