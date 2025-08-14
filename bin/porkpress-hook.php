@@ -85,31 +85,44 @@ if ( ! in_array($action, ['add', 'auth', 'del', 'cleanup', 'deploy', 'renew'], t
     exit(1);
 }
 
-$domain = getenv('CERTBOT_DOMAIN');
-$validation = getenv('CERTBOT_VALIDATION');
-$token = getenv('CERTBOT_TOKEN');
-if (('add' === $action || 'auth' === $action) && ( !$domain || !$validation )) {
-    fwrite(STDERR, "CERTBOT_DOMAIN or CERTBOT_VALIDATION missing.\n");
-    exit(1);
+$domain     = sanitize_text_field( getenv( 'CERTBOT_DOMAIN' ) ?: '' );
+$validation = sanitize_text_field( getenv( 'CERTBOT_VALIDATION' ) ?: '' );
+$token      = sanitize_text_field( getenv( 'CERTBOT_TOKEN' ) ?: '' );
+
+if ( function_exists( 'idn_to_ascii' ) ) {
+    $domain = idn_to_ascii( $domain, 0, INTL_IDNA_VARIANT_UTS46 ) ?: $domain;
+}
+$domain = strtolower( $domain );
+
+if ( ( 'add' === $action || 'auth' === $action ) && ( '' === $domain || '' === $validation ) ) {
+    fwrite( STDERR, "CERTBOT_DOMAIN or CERTBOT_VALIDATION missing.\n" );
+    exit( 1 );
+}
+
+if ( '' === $domain || ! filter_var( $domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME ) ) {
+    fwrite( STDERR, "Invalid domain: {$domain}\n" );
+    exit( 1 );
 }
 
 // Determine base zone and record name.
-$parts = explode('.', $domain);
-if ( count($parts) < 2 ) {
-    fwrite(STDERR, "Invalid domain: {$domain}\n");
-    exit(1);
+$parts = explode( '.', $domain );
+if ( count( $parts ) < 2 ) {
+    fwrite( STDERR, "Invalid domain: {$domain}\n" );
+    exit( 1 );
 }
-$zone = implode('.', array_slice($parts, -2));
-$sub = implode('.', array_slice($parts, 0, -2));
-$record_name = '_acme-challenge' . ($sub ? '.' . $sub : '');
+$zone        = implode( '.', array_slice( $parts, -2 ) );
+$sub         = implode( '.', array_slice( $parts, 0, -2 ) );
+$record_name = '_acme-challenge' . ( $sub ? '.' . $sub : '' );
 
 // Fetch API credentials.
-$api_key = getenv('PORKBUN_API_KEY');
-$api_secret = getenv('PORKBUN_API_SECRET');
+$api_key    = getenv( 'PORKBUN_API_KEY' ) ?: getenv( 'PORKPRESS_API_KEY' );
+$api_secret = getenv( 'PORKBUN_API_SECRET' ) ?: getenv( 'PORKPRESS_API_SECRET' );
 if ( ! $api_key || ! $api_secret ) {
-    $api_key = defined('PORKPRESS_API_KEY') ? PORKPRESS_API_KEY : get_site_option('porkpress_ssl_api_key', '');
-    $api_secret = defined('PORKPRESS_API_SECRET') ? PORKPRESS_API_SECRET : get_site_option('porkpress_ssl_api_secret', '');
+    $api_key    = defined( 'PORKPRESS_API_KEY' ) ? PORKPRESS_API_KEY : get_site_option( 'porkpress_ssl_api_key', '' );
+    $api_secret = defined( 'PORKPRESS_API_SECRET' ) ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
 }
+$api_key    = sanitize_text_field( $api_key );
+$api_secret = sanitize_text_field( $api_secret );
 if ( empty($api_key) || empty($api_secret) ) {
     Logger::error('certbot_hook', ['action' => $action, 'domain' => $domain], 'missing_api_credentials');
     fwrite(STDERR, "Missing API credentials.\n");
