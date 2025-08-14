@@ -139,26 +139,27 @@ class Admin {
                         return;
                 }
 
-                $service         = new Domain_Service();
-                $domains         = $service->list_domains();
-                $total_domains   = 0;
-                $upcoming_expiry = 0;
-                if ( $domains instanceof Porkbun_Client_Error ) {
-                        echo '<div class="notice notice-error"><p>' . esc_html( $domains->message ) . '</p></div>';
-                } elseif ( ! empty( $domains['domains'] ) ) {
-                        $total_domains = count( $domains['domains'] );
-                        $threshold     = time() + 30 * DAY_IN_SECONDS;
-                        foreach ( $domains['domains'] as $domain ) {
-                                if ( ! empty( $domain['expiry'] ) ) {
-                                        $expiry = strtotime( $domain['expiry'] );
-                                        if ( $expiry && $expiry <= $threshold ) {
-                                                $upcoming_expiry++;
-                                        }
-                                }
-                        }
-                }
+               $service         = new Domain_Service();
+               $domains         = $service->list_domains();
+               $total_domains   = 0;
+               $upcoming_expiry = 0;
+               $last_refresh    = $service->get_last_refresh();
+               if ( $domains instanceof Porkbun_Client_Error ) {
+                       echo '<div class="notice notice-error"><p>' . esc_html( $domains->message ) . '</p></div>';
+               } elseif ( ! empty( $domains['root_domains'] ) ) {
+                       $total_domains = count( $domains['root_domains'] );
+                       $threshold     = time() + 30 * DAY_IN_SECONDS;
+                       foreach ( $domains['root_domains'] as $domain ) {
+                               if ( ! empty( $domain['expiry'] ) ) {
+                                       $expiry = strtotime( $domain['expiry'] );
+                                       if ( $expiry && $expiry <= $threshold ) {
+                                               $upcoming_expiry++;
+                                       }
+                               }
+                       }
+               }
 
-       $mapped       = count( $service->get_aliases() );
+      $mapped       = count( $service->get_aliases() );
 
        $reconciler   = new Reconciler( $service );
        $drift        = $reconciler->reconcile_all( false );
@@ -186,6 +187,7 @@ class Admin {
                __( 'Upcoming Expiries (≤30 days)', 'porkpress-ssl' ) => number_format_i18n( $upcoming_expiry ),
                __( 'Last SSL Run Status', 'porkpress-ssl' )        => $ssl_status,
                __( 'Last Reconcile', 'porkpress-ssl' )            => $reconcile_stat,
+               __( 'Last Domain Refresh', 'porkpress-ssl' )       => $last_refresh ? date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last_refresh ) : __( 'Never', 'porkpress-ssl' ),
                __( 'Apache Reload Command', 'porkpress-ssl' )      => $apache_cmd ? $apache_cmd : __( 'Not found', 'porkpress-ssl' ),
                __( 'Command Runner', 'porkpress-ssl' )            => Runner::describe(),
        );
@@ -399,6 +401,15 @@ class Admin {
 
               $service = new Domain_Service();
 
+               if ( isset( $_POST['porkpress_ssl_refresh_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_refresh_nonce'] ), 'porkpress_ssl_refresh' ) ) {
+                       $refresh = $service->refresh_domains();
+                       if ( $refresh instanceof Porkbun_Client_Error ) {
+                               echo '<div class="error"><p>' . esc_html( $refresh->message ) . '</p></div>';
+                       } else {
+                               echo '<div class="updated"><p>' . esc_html__( 'Domain list refreshed.', 'porkpress-ssl' ) . '</p></div>';
+                       }
+               }
+
                $simulate_steps = '';
                if ( isset( $_POST['porkpress_ssl_simulate_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_simulate_nonce'] ), 'porkpress_ssl_simulate' ) ) {
                        $dry_service = new Domain_Service( null, true );
@@ -461,13 +472,23 @@ class Admin {
                submit_button( __( 'Run now', 'porkpress-ssl' ), 'secondary', 'issue_now', false );
                echo '</form>';
 
+               echo '<form method="post" style="margin-bottom:1em;">';
+               wp_nonce_field( 'porkpress_ssl_refresh', 'porkpress_ssl_refresh_nonce' );
+               submit_button( __( 'Refresh Domains', 'porkpress-ssl' ), 'secondary', 'refresh_domains', false );
+               echo '</form>';
+
+               $last_refresh = $service->get_last_refresh();
+               if ( $last_refresh ) {
+                       echo '<p>' . sprintf( esc_html__( 'Last refresh: %s', 'porkpress-ssl' ), esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last_refresh ) ) ) . '</p>';
+               }
+
                $aliases   = $service->get_aliases();
                $alias_map = array();
                foreach ( $aliases as $alias ) {
                        $alias_map[ strtolower( $alias['domain'] ) ] = $alias;
                }
 
-               $result = $service->list_domains( 1, 100, true );
+               $result = $service->list_domains();
                 if ( $result instanceof Porkbun_Client_Error ) {
                         $message = $result->message;
                         if ( $result->status ) {

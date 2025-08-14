@@ -14,6 +14,9 @@ if ( ! function_exists( 'get_site_option' ) ) {
         return $default;
     }
 }
+if ( ! function_exists( 'update_site_option' ) ) {
+    function update_site_option( $key, $value ) {}
+}
 if ( ! defined( 'ARRAY_A' ) ) {
     define( 'ARRAY_A', 'ARRAY_A' );
 }
@@ -29,7 +32,7 @@ class DryRunTest extends TestCase {
         $wpdb = new MockWpdb();
 
         $service = new \PorkPress\SSL\Domain_Service( null, true );
-        $result  = $service->list_domains();
+        $result  = $service->refresh_domains();
         $plan    = $service->get_plan();
 
         $this->assertSame( 'SUCCESS', $result['status'] );

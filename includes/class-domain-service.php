@@ -39,8 +39,7 @@ protected bool $dry_run = false;
  */
 protected ?array $domain_list_cache = null;
 
-private const DOMAIN_LIST_CACHE_KEY = 'porkpress_ssl_domain_list';
-private const DOMAIN_LIST_CACHE_TTL = 300; // 5 minutes
+private const DOMAIN_CACHE_OPTION = 'porkpress_ssl_domain_cache';
 private const DOMAIN_LIST_MAX_PAGES = 100;
 
 private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
@@ -399,32 +398,38 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
     }
 
     /**
-     * List domains.
-     *
-     * Results are cached for the duration of the request and persisted in a
-     * site transient for five minutes. Use
-     * {@see delete_site_transient()} with the `porkpress_ssl_domain_list`
-     * key to invalidate the cache when domain data changes.
-     *
-     * @param int $page     Page number.
-     * @param int $per_page Domains per page.
+     * Retrieve cached domain list.
      *
      * @return array|Porkbun_Client_Error
      */
-    public function list_domains( int $page = 1, int $per_page = 100, bool $include_dns = false ) {
-        if ( ! $include_dns && null !== $this->domain_list_cache ) {
+    public function list_domains() {
+        if ( null !== $this->domain_list_cache ) {
             return $this->domain_list_cache;
         }
 
-        $cached = false;
-        if ( ! $include_dns && function_exists( 'get_site_transient' ) ) {
-            $cached = get_site_transient( self::DOMAIN_LIST_CACHE_KEY );
-            if ( false !== $cached ) {
-                $this->domain_list_cache = $cached;
+        if ( function_exists( 'get_site_option' ) ) {
+            $cached = get_site_option( self::DOMAIN_CACHE_OPTION );
+            if ( is_array( $cached ) && isset( $cached['data'] ) ) {
+                $this->domain_list_cache = $cached['data'];
                 return $this->domain_list_cache;
             }
         }
 
+        return new Porkbun_Client_Error(
+            'no_cache',
+            __( 'Domain list not cached. Please refresh in the Domains tab.', 'porkpress-ssl' )
+        );
+    }
+
+    /**
+     * Refresh domain list from Porkbun and store in cache.
+     *
+     * @param int $page     Page number to start from.
+     * @param int $per_page Domains per page.
+     *
+     * @return array|Porkbun_Client_Error
+     */
+    public function refresh_domains( int $page = 1, int $per_page = 100 ) {
         $status       = 'SUCCESS';
         $all_domains  = array();
         $current_page = $page;
@@ -483,51 +488,65 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
         } while ( ! empty( $domains ) );
 
         $final = array(
-            'status'  => $status,
-            'domains' => $all_domains,
+            'status'       => $status,
+            'root_domains' => $all_domains,
+            'domains'      => $all_domains,
         );
 
-        if ( $include_dns ) {
-            $extra = array();
-            foreach ( $all_domains as $domain_info ) {
-                $root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
-                if ( ! $root ) {
-                    continue;
-                }
-                $records = $this->client->get_records( $root );
-                if ( $records instanceof Porkbun_Client_Error ) {
-                    continue;
-                }
-                $seen = array();
-                foreach ( $records['records'] ?? array() as $rec ) {
-                    $name = $rec['name'] ?? '';
-                    if ( '' === $name || '@' === $name ) {
-                        continue;
-                    }
-                    $fqdn = $name . '.' . $root;
-                    $key  = strtolower( $fqdn );
-                    if ( isset( $seen[ $key ] ) ) {
-                        continue;
-                    }
-                    $seen[ $key ] = true;
-                    $extra[]      = array(
-                        'domain' => $fqdn,
-                        'status' => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
-                        'expiry' => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
-                    );
-                }
+        $extra = array();
+        foreach ( $all_domains as $domain_info ) {
+            $root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
+            if ( ! $root ) {
+                continue;
             }
-            $final['domains'] = array_merge( $final['domains'], $extra );
-            return $final;
+            $records = $this->client->get_records( $root );
+            if ( $records instanceof Porkbun_Client_Error ) {
+                continue;
+            }
+            $seen = array();
+            foreach ( $records['records'] ?? array() as $rec ) {
+                $name = $rec['name'] ?? '';
+                if ( '' === $name || '@' === $name ) {
+                    continue;
+                }
+                $fqdn = $name . '.' . $root;
+                $key  = strtolower( $fqdn );
+                if ( isset( $seen[ $key ] ) ) {
+                    continue;
+                }
+                $seen[ $key ] = true;
+                $extra[]      = array(
+                    'domain' => $fqdn,
+                    'status' => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
+                    'expiry' => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+                );
+            }
         }
+        $final['domains'] = array_merge( $final['domains'], $extra );
 
         $this->domain_list_cache = $final;
 
-        if ( ! $cached && function_exists( 'set_site_transient' ) ) {
-            set_site_transient( self::DOMAIN_LIST_CACHE_KEY, $final, self::DOMAIN_LIST_CACHE_TTL );
+        if ( function_exists( 'update_site_option' ) ) {
+            update_site_option( self::DOMAIN_CACHE_OPTION, array(
+                'data'      => $final,
+                'timestamp' => time(),
+            ) );
         }
 
         return $final;
+    }
+
+    /**
+     * Get timestamp of last domain refresh.
+     */
+    public function get_last_refresh(): int {
+        if ( function_exists( 'get_site_option' ) ) {
+            $cached = get_site_option( self::DOMAIN_CACHE_OPTION );
+            if ( is_array( $cached ) && isset( $cached['timestamp'] ) ) {
+                return (int) $cached['timestamp'];
+            }
+        }
+        return 0;
     }
 
     /**
