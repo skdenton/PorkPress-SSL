@@ -180,18 +180,24 @@ class Porkbun_Client {
 
        /**
         * Create an A or AAAA record. Default TTL is 600 seconds.
+        *
+        * The {@see $name} parameter should be empty for apex records and contain
+        * only the subdomain portion for others.
+        *
+        * Uses Porkbun's v3 DNS create endpoint: `/api/json/v3/dns/create/{domain}`.
         */
        public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
-		$name    = sanitize_text_field( $name );
-		$content = sanitize_text_field( $content );
+               $name    = sanitize_text_field( $name );
+               $content = sanitize_text_field( $content );
 
-                return $this->request( "dns/create/{$domain}", [
-                        'type'    => $type,
-                        'name'    => $name,
-                        'content' => $content,
-                        'ttl'     => $ttl,
-                ] );
-        }
+               // Hitting Porkbun v3 DNS create endpoint.
+               return $this->request( "dns/create/{$domain}", [
+                       'type'    => $type,
+                       'name'    => $name,
+                       'content' => $content,
+                       'ttl'     => $ttl,
+               ] );
+       }
 
        /**
         * Retrieve a single DNS record by ID.
@@ -202,11 +208,17 @@ class Porkbun_Client {
 
        /**
         * Create a DNS record of any type. Default TTL is 600 seconds.
+        *
+        * The {@see $name} parameter should be empty for apex records and contain
+        * only the subdomain portion for others.
+        *
+        * Uses Porkbun's v3 DNS create endpoint: `/api/json/v3/dns/create/{domain}`.
         */
        public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 600 ) {
-		$name    = sanitize_text_field( $name );
-		$content = sanitize_text_field( $content );
+               $name    = sanitize_text_field( $name );
+               $content = sanitize_text_field( $content );
 
+               // Hitting Porkbun v3 DNS create endpoint.
                return $this->request( "dns/create/{$domain}", [
                        'type'    => $type,
                        'name'    => $name,
