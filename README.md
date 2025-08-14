@@ -114,6 +114,19 @@ $client->edit_record( 'example.com', 123, 'A', '', '198.51.100.5', 600 );
 $client->delete_record( 'example.com', 123 );
 ```
 
+### Validation, errors and troubleshooting
+
+DNS arguments are validated before any API call is made. The record `type` must be one of Porkbun's supported types (`A`, `AAAA`, `CNAME`, `TXT`, `MX`, `SRV`, `NS`, `PTR`, `CAA` or `ALIAS`) and the `ttl` value must be an integer. Requests failing validation or the API itself will return a `WP_Error` or `Porkbun_Client_Error` object describing the issue.
+
+Network administrators can inspect detailed request and response logs from **PorkPress SSL → Logs** in the Network Admin. Logs can be filtered by severity or exported for offline analysis.
+
+Troubleshooting tips:
+
+* Ensure the record type and TTL are valid.
+* Verify the domain uses Porkbun nameservers and that API credentials are correct.
+* Check the plugin logs for the error message returned by the API.
+* Remove conflicting records or wait for DNS propagation before retrying.
+
 ## Enabling `sunrise.php`
 
 To enable sunrise functionality, add the following to `wp-config.php`:
