@@ -36,8 +36,8 @@ class Porkbun_Client_DryRun extends Porkbun_Client {
             return array( 'status' => 'SUCCESS', 'domains' => array() );
         }
 
-        if ( 0 === strpos( $endpoint, 'domain/get/' ) ) {
-            return array( 'status' => 'SUCCESS', 'domain' => array( 'status' => 'ACTIVE' ) );
+        if ( 0 === strpos( $endpoint, 'domain/getNs/' ) ) {
+            return array( 'status' => 'SUCCESS', 'ns' => array() );
         }
 
         return array( 'status' => 'SUCCESS' );

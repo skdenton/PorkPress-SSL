@@ -54,8 +54,8 @@ class ReconcilerTest extends TestCase {
             public function list_domains( int $page = 1, int $per_page = 100 ) {
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
-            public function get_domain( string $domain ) {
-                return [ 'status' => 'SUCCESS', 'domain' => [ 'status' => 'INACTIVE' ] ];
+            public function get_domain_details( string $domain ) {
+                return array( 'domain' => $domain, 'status' => 'INACTIVE' );
             }
             public function get_records( string $domain ) {
                 return array( 'records' => array() );
@@ -116,7 +116,7 @@ class ReconcilerTest extends TestCase {
             public function get_records( string $domain ) {
                 return array( 'records' => array() );
             }
-            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
+            public function get_nameservers( string $domain ) { return array( 'status' => 'SUCCESS', 'ns' => array() ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
@@ -177,7 +177,7 @@ class ReconcilerTest extends TestCase {
             public function get_records( string $domain ) {
                 return array( 'records' => array() );
             }
-            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
+            public function get_nameservers( string $domain ) { return array( 'status' => 'SUCCESS', 'ns' => array() ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
@@ -229,7 +229,7 @@ class ReconcilerTest extends TestCase {
                 }
                 return array( 'records' => array() );
             }
-            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
+            public function get_nameservers( string $domain ) { return array( 'status' => 'SUCCESS', 'ns' => array() ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {

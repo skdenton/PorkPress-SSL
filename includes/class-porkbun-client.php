@@ -105,12 +105,38 @@ class Porkbun_Client {
        }
 
        /**
-        * Retrieve details for a single domain.
+        * Retrieve nameservers for a domain.
         */
-       public function get_domain( string $domain ) {
+       public function get_nameservers( string $domain ) {
                $domain = strtolower( $domain );
 
-               return $this->request( "domain/get/{$domain}", [] );
+               return $this->request( "domain/getNs/{$domain}", [] );
+       }
+
+       /**
+        * Retrieve details for a single domain via listAll.
+        *
+        * Porkbun's API does not expose a dedicated endpoint for domain
+        * details, so we fetch the full list and filter by domain name.
+        *
+        * @return array|Porkbun_Client_Error Domain info on success, error on failure.
+        */
+       public function get_domain_details( string $domain ) {
+               $domain = strtolower( $domain );
+
+               $result = $this->request( 'domain/listAll', [ 'start' => '0' ] );
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       return $result;
+               }
+
+               foreach ( $result['domains'] ?? array() as $info ) {
+                       if ( isset( $info['domain'] ) && strtolower( $info['domain'] ) === $domain ) {
+                               return $info;
+                       }
+               }
+
+               return array();
        }
 
        /**
