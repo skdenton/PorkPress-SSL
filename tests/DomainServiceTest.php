@@ -876,6 +876,27 @@ class DomainServiceTest extends TestCase {
         update_site_option( 'porkpress_ssl_ipv4_override', '' );
     }
 
+    public function testCheckDnsHealthOkWithServerIpOverrides() {
+        global $dns_records;
+        $dns_records = array(
+            'domain.test' => array(
+                array( 'type' => 'A', 'ip' => '4.4.4.4' ),
+            ),
+        );
+        update_site_option( 'porkpress_ssl_prod_server_ip', '3.3.3.3' );
+        update_site_option( 'porkpress_ssl_dev_server_ip', '4.4.4.4' );
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() { $this->missing_credentials = false; }
+        };
+
+        $result = $service->check_dns_health( 'domain.test' );
+        $this->assertTrue( $result );
+
+        update_site_option( 'porkpress_ssl_prod_server_ip', '' );
+        update_site_option( 'porkpress_ssl_dev_server_ip', '' );
+    }
+
     public function testCheckDnsHealthUsesDigFallbackWhenDnsGetRecordMissing() {
         $service = new class extends \PorkPress\SSL\Domain_Service {
             public function __construct() { $this->missing_credentials = false; }
