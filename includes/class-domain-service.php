@@ -929,6 +929,36 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
        }
 
        /**
+        * Retrieve DNS records for a domain.
+        *
+        * @param string $domain Domain zone.
+        * @return array|Porkbun_Client_Error|\WP_Error List of records or error on failure.
+        */
+       public function get_dns_records( string $domain ) {
+               $domain = $this->validate_fqdn( $domain );
+               if ( false === $domain ) {
+                       return new \WP_Error( 'invalid_domain', __( 'Invalid domain name.', 'porkpress-ssl' ) );
+               }
+
+               try {
+                       $result = $this->client->get_records( $domain );
+               } catch ( \Throwable $e ) {
+                       $result = new Porkbun_Client_Error( 'client_error', $e->getMessage() );
+               }
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       Logger::error(
+                               'get_dns_records',
+                               array( 'domain' => $domain ),
+                               $result->message
+                       );
+                       return $result;
+               }
+
+               return $result['records'] ?? array();
+       }
+
+       /**
         * Add a DNS record.
         *
         * @param string $domain  Domain zone.

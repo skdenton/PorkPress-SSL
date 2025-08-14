@@ -2,6 +2,10 @@ jQuery(function($){
     function render(records){
         var $tbody = $('#porkpress-dns-records tbody');
         $tbody.empty();
+        if(!Array.isArray(records)){
+            alert(porkpressDNS.i18n.error);
+            return;
+        }
         records.forEach(function(r){
             var row = '<tr data-id="'+r.id+'">'+
                 '<td><input type="text" class="dns-type" value="'+r.type+'" /></td>'+
@@ -18,13 +22,17 @@ jQuery(function($){
         data.action = 'porkpress_dns_'+action;
         data.nonce = porkpressDNS.nonce;
         data.domain = porkpressDNS.domain;
-        $.post(porkpressDNS.ajaxUrl, data, function(res){
-            if(res.success){
-                render(res.data.records);
-            }else{
-                alert(res.data);
-            }
-        });
+        $.post(porkpressDNS.ajaxUrl, data)
+            .done(function(res){
+                if(res.success){
+                    render(res.data.records);
+                }else{
+                    alert(res.data || porkpressDNS.i18n.error);
+                }
+            })
+            .fail(function(){
+                alert(porkpressDNS.i18n.error);
+            });
     }
     $('#porkpress-dns-records').on('click','.dns-add-btn', function(e){
         e.preventDefault();
@@ -55,4 +63,5 @@ jQuery(function($){
             record_id: $tr.data('id')
         });
     });
+    send('retrieve', {});
 });
