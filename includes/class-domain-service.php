@@ -854,25 +854,33 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
        /**
         * Ensure a www CNAME exists.
         */
-       protected function ensure_www_cname( string $domain, int $ttl ) {
-               $parts = $this->split_domain( $domain );
-               $zone  = $parts['zone'];
-               $name  = $parts['name'];
+      protected function ensure_www_cname( string $domain, int $ttl ) {
+              $parts = $this->split_domain( $domain );
+              $zone  = $parts['zone'];
+              $name  = $parts['name'];
 
-               if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieve_by_name_type' ) || ! method_exists( $this->client, 'edit_by_name_type' ) ) {
-                       return true;
-               }
+              if ( ! isset( $this->client ) || ! method_exists( $this->client, 'retrieve_by_name_type' ) || ! method_exists( $this->client, 'edit_by_name_type' ) ) {
+                      return true;
+              }
 
-               $record_name = $name ? 'www.' . $name : 'www';
+              $record_name = $name ? 'www.' . $name : 'www';
+              $target      = $name ? $name . '.' . $zone : $domain;
 
-               try {
-                       $this->client->retrieve_by_name_type( $zone, $record_name, 'CNAME' );
-               } catch ( \Throwable $e ) {
-                       return true;
-               }
+              try {
+                      $this->client->retrieve_by_name_type( $zone, $record_name, 'CNAME' );
+              } catch ( \Throwable $e ) {
+                      if ( ! $name || ! apply_filters( 'porkpress_ssl_add_www_cname', false, $domain ) ) {
+                              return true;
+                      }
+                      return $this->ensure_dns_record( $target, $target, $ttl, 'CNAME', 0, $record_name );
+              }
 
-               return $this->ensure_dns_record( $domain, $domain, $ttl, 'CNAME', 0, $record_name );
-       }
+              if ( $name && ! apply_filters( 'porkpress_ssl_add_www_cname', false, $domain ) ) {
+                      return true;
+              }
+
+              return $this->ensure_dns_record( $target, $target, $ttl, 'CNAME', 0, $record_name );
+      }
 
        /**
         * Remove A/AAAA records pointing to the network IPs.
