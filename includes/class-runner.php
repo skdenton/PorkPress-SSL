@@ -36,9 +36,8 @@ class Runner {
         if ( self::$method ) {
             return self::$method;
         }
-        if ( self::function_available( 'shell_exec' ) ) {
-            self::$method = 'shell';
-        } elseif ( self::function_available( 'proc_open' ) ) {
+        if ( self::function_available( 'proc_open' ) ) {
+            // Prefer proc_open to avoid direct shell access per WordPress guidelines.
             self::$method = 'proc';
         } else {
             self::$method = 'wpcli';
@@ -54,18 +53,6 @@ class Runner {
      */
     protected static function raw_run( string $cmd ): array {
         $method = self::method();
-        if ( 'shell' === $method ) {
-            $output = shell_exec( $cmd . ' 2>&1; echo "\n$?"' );
-            if ( ! is_string( $output ) ) {
-                return array( 'code' => 1, 'output' => '' );
-            }
-            $lines = preg_split( '/\r?\n/', rtrim( $output ) );
-            $code  = (int) array_pop( $lines );
-            return array(
-                'code'   => $code,
-                'output' => implode( "\n", $lines ),
-            );
-        }
         if ( 'proc' === $method ) {
             $desc = array(
                 1 => array( 'pipe', 'w' ),
@@ -150,9 +137,6 @@ class Runner {
     public static function describe(): string {
         $mode = self::method();
         switch ( $mode ) {
-            case 'shell':
-                $mode = 'shell_exec';
-                break;
             case 'proc':
                 $mode = 'proc_open';
                 break;
