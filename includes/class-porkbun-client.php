@@ -149,12 +149,14 @@ class Porkbun_Client {
                return $this->request( "domain/checkDomain/{$domain}", [] );
        }
 
-        /**
-         * Retrieve DNS records for a domain.
- */
-        public function get_records( string $domain ) {
-                return $this->request( "dns/retrieve/{$domain}", [] );
-        }
+       /**
+        * Retrieve DNS records for a domain.
+        *
+        * Uses Porkbun's v3 DNS retrieve endpoint: `/api/json/v3/dns/retrieve/{domain}`.
+        */
+       public function get_records( string $domain ) {
+               return $this->request( "dns/retrieve/{$domain}", [] );
+       }
 
        /**
         * Create a TXT record. Default TTL is 600 seconds.
@@ -171,12 +173,14 @@ class Porkbun_Client {
 		] );
 	}
 
-	/**
-	 * Delete a TXT record by ID.
-	 */
-	public function delete_txt_record( string $domain, int $record_id ) {
-		return $this->delete_record( $domain, $record_id );
-	}
+       /**
+        * Delete a TXT record by ID.
+        *
+        * Uses Porkbun's v3 DNS delete endpoint: `/api/json/v3/dns/delete/{domain}/{id}`.
+        */
+       public function delete_txt_record( string $domain, int $record_id ) {
+               return $this->delete_record( $domain, $record_id );
+       }
 
        /**
         * Create an A or AAAA record. Default TTL is 600 seconds.
@@ -201,6 +205,8 @@ class Porkbun_Client {
 
        /**
         * Retrieve a single DNS record by ID.
+        *
+        * Uses Porkbun's v3 DNS retrieve endpoint: `/api/json/v3/dns/retrieve/{domain}/{id}`.
         */
        public function get_record( string $domain, int $record_id ) {
                return $this->request( "dns/retrieve/{$domain}/{$record_id}", [] );
@@ -251,6 +257,8 @@ class Porkbun_Client {
         * Optional fields:
         * - ttl (int): Time to live in seconds.
         * - prio (int): Priority for MX and SRV records.
+        *
+        * Uses Porkbun's v3 DNS edit endpoint: `/api/json/v3/dns/edit/{domain}/{id}`.
         */
        public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 600, ?int $prio = null ) {
                $type    = strtoupper( sanitize_text_field( $type ) );
@@ -305,6 +313,9 @@ class Porkbun_Client {
 
        /**
         * Retrieve DNS records by subdomain and type.
+        *
+        * Uses Porkbun's v3 DNS retrieveByNameType endpoint:
+        * `/api/json/v3/dns/retrieveByNameType/{domain}/{type}/{subdomain}`.
         */
        public function retrieve_by_name_type( string $domain, string $subdomain, string $type ) {
                 $subdomain = sanitize_text_field( $subdomain );
@@ -314,6 +325,9 @@ class Porkbun_Client {
 
        /**
         * Edit or create a DNS record by subdomain and type.
+        *
+        * Uses Porkbun's v3 DNS editByNameType endpoint:
+        * `/api/json/v3/dns/editByNameType/{domain}/{type}/{subdomain}`.
         */
        public function edit_by_name_type( string $domain, string $subdomain, string $type, string $content, ?int $ttl = null ) {
                 $subdomain = sanitize_text_field( $subdomain );
@@ -340,10 +354,12 @@ class Porkbun_Client {
 
         /**
          * Delete a record by ID.
+         *
+         * Uses Porkbun's v3 DNS delete endpoint: `/api/json/v3/dns/delete/{domain}/{id}`.
          */
         public function delete_record( string $domain, int $record_id ) {
                 return $this->request( "dns/delete/{$domain}/{$record_id}", [] );
-	}
+        }
 
 	/**
 	 * Perform API request with retries and backoff.
@@ -561,6 +577,9 @@ class Porkbun_Client {
 
        /**
         * Delete DNS records by subdomain and type.
+        *
+        * Uses Porkbun's v3 DNS deleteByNameType endpoint:
+        * `/api/json/v3/dns/deleteByNameType/{domain}/{type}/{subdomain}`.
         */
        public function delete_by_name_type( string $domain, string $subdomain, string $type ) {
                $subdomain = sanitize_text_field( $subdomain );
