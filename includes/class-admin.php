@@ -467,7 +467,7 @@ class Admin {
                        $alias_map[ strtolower( $alias['domain'] ) ] = $alias;
                }
 
-               $result = $service->list_domains();
+               $result = $service->list_domains( 1, 100, true );
                 if ( $result instanceof Porkbun_Client_Error ) {
                         $message = $result->message;
                         if ( $result->status ) {

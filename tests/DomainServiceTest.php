@@ -658,6 +658,33 @@ class DomainServiceTest extends TestCase {
         );
     }
 
+    public function testListDomainsIncludesSubdomains() {
+        $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public int $calls = 0;
+            public function __construct() {}
+            public function list_domains( int $page = 1, int $per_page = 100 ) {
+                $this->calls++;
+                if ( 1 === $this->calls ) {
+                    return array( 'status' => 'SUCCESS', 'domains' => array( array( 'domain' => 'adynton.net', 'status' => 'ACTIVE' ) ) );
+                }
+                return array( 'status' => 'SUCCESS', 'domains' => array() );
+            }
+            public function get_records( string $domain ) {
+                return array( 'records' => array( array( 'type' => 'A', 'name' => 'dev', 'content' => '1.2.3.4' ) ) );
+            }
+        };
+
+        $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+        };
+
+        $result  = $service->list_domains( 1, 100, true );
+        $domains = array_column( $result['domains'], 'domain' );
+
+        $this->assertContains( 'adynton.net', $domains );
+        $this->assertContains( 'dev.adynton.net', $domains );
+    }
+
     public function testCheckDnsHealthOkWithMultipleExpectedIps() {
         global $dns_records;
         $dns_records = array(
