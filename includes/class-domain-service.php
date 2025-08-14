@@ -55,6 +55,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
                $api_key    = defined( 'PORKPRESS_API_KEY' ) ? PORKPRESS_API_KEY : get_site_option( 'porkpress_ssl_api_key', '' );
                $api_secret = defined( 'PORKPRESS_API_SECRET' ) ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
+		$timeout   = max( 1, (int) get_site_option( 'porkpress_ssl_api_timeout', 20 ) );
 
                $this->missing_credentials = empty( $api_key ) || empty( $api_secret );
                if ( $this->dry_run ) {
@@ -71,8 +72,8 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                        $this->client = $client;
                } else {
                        $this->client = $this->dry_run
-                               ? new Porkbun_Client_DryRun( $api_key, $api_secret )
-                               : new Porkbun_Client( $api_key, $api_secret );
+                               ? new Porkbun_Client_DryRun( $api_key, $api_secret, null, $timeout )
+                               : new Porkbun_Client( $api_key, $api_secret, null, $timeout );
                }
        }
 
@@ -286,7 +287,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
                $failures = get_site_option( self::DNS_PROPAGATION_OPTION, array() );
                $now      = time();
-               $timeout  = (int) get_site_option( 'porkpress_ssl_dns_timeout', 900 );
+		$timeout  = (int) get_site_option( 'porkpress_ssl_dns_timeout', 900 );
 
                if ( ! isset( $failures[ $domain ] ) ) {
                        $failures[ $domain ] = $now;

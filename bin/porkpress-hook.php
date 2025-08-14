@@ -123,13 +123,14 @@ if ( ! $api_key || ! $api_secret ) {
 }
 $api_key    = sanitize_text_field( $api_key );
 $api_secret = sanitize_text_field( $api_secret );
+$timeout   = max( 1, (int) get_site_option( 'porkpress_ssl_api_timeout', 20 ) );
 if ( empty($api_key) || empty($api_secret) ) {
     Logger::error('certbot_hook', ['action' => $action, 'domain' => $domain], 'missing_api_credentials');
     fwrite(STDERR, "Missing API credentials.\n");
     exit(1);
 }
 
-$client = new Porkbun_Client($api_key, $api_secret);
+$client = new Porkbun_Client($api_key, $api_secret, null, $timeout);
 
 if ( 'add' === $action || 'auth' === $action ) {
     $result = $client->create_txt_record($zone, $record_name, $validation, 600);

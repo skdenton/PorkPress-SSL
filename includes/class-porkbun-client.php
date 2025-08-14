@@ -62,11 +62,17 @@ class Porkbun_Client {
 	private float $base_delay = 1.0;
 
 	/**
+	 * Request timeout in seconds.
+	 */
+	private int $timeout = 20;
+
+	/**
 	 * Constructor.
 	 */
-	public function __construct( string $api_key, string $secret_key, ?string $base_url = null ) {
+	public function __construct( string $api_key, string $secret_key, ?string $base_url = null, int $timeout = 20 ) {
 		$this->api_key	  = $api_key;
 		$this->secret_key = $secret_key;
+		$this->timeout    = $timeout;
 		if ( null !== $base_url ) {
 			$this->base_url = rtrim( $base_url, '/' ) . '/';
 		}
@@ -289,6 +295,7 @@ class Porkbun_Client {
                                 'method'  => $method,
                                 'headers' => [ 'Content-Type' => 'application/json' ],
                                 'body'    => wp_json_encode( $payload ),
+                                'timeout' => $this->timeout,
                         ];
 
                         if ( 'POST' === strtoupper( $method ) ) {
@@ -311,6 +318,8 @@ class Porkbun_Client {
                 curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
                 curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, $method );
                 curl_setopt( $ch, CURLOPT_HTTPHEADER, [ 'Content-Type: application/json' ] );
+                curl_setopt( $ch, CURLOPT_TIMEOUT, $this->timeout );
+                curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, $this->timeout );
                 curl_setopt( $ch, CURLOPT_POSTFIELDS, ( function_exists( 'wp_json_encode' ) ? wp_json_encode( $payload ) : json_encode( $payload ) ) );
                 $body = curl_exec( $ch );
                 if ( false === $body ) {

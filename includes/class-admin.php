@@ -835,6 +835,9 @@ update_site_option( 'porkpress_ssl_le_staging', $staging );
 
 $renew_window = isset( $_POST['porkpress_renew_window'] ) ? absint( wp_unslash( $_POST['porkpress_renew_window'] ) ) : 0;
 update_site_option( 'porkpress_ssl_renew_window', $renew_window );
+$raw_api_timeout = isset( $_POST['porkpress_api_timeout'] ) ? absint( wp_unslash( $_POST['porkpress_api_timeout'] ) ) : 0;
+$api_timeout     = max( 1, $raw_api_timeout );
+update_site_option( 'porkpress_ssl_api_timeout', $api_timeout );
 
 $raw_txt_timeout = isset( $_POST['porkpress_txt_timeout'] ) ? absint( wp_unslash( $_POST['porkpress_txt_timeout'] ) ) : 0;
 $txt_timeout     = max( 1, $raw_txt_timeout );
@@ -883,6 +886,7 @@ $network_wildcard = (bool) get_site_option( 'porkpress_ssl_network_wildcard', 0 
                     'api_secret_changed' => ! $api_secret_locked && isset( $_POST['porkpress_api_secret'] ),
                     'le_staging'         => (bool) $staging,
                     'renew_window'       => $renew_window,
+                    'api_timeout'        => $api_timeout,
                     'txt_timeout'        => $txt_timeout,
                     'txt_interval'       => $txt_interval,
                     'ipv4_override'      => $ipv4_override,
@@ -911,6 +915,7 @@ $api_key    = $api_key_locked ? PORKPRESS_API_KEY : get_site_option( 'porkpress_
 $api_secret = $api_secret_locked ? PORKPRESS_API_SECRET : get_site_option( 'porkpress_ssl_api_secret', '' );
 $staging    = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 $renew_window = absint( get_site_option( 'porkpress_ssl_renew_window', 30 ) );
+$api_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_api_timeout', 20 ) ) );
 $txt_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_txt_timeout', 600 ) ) );
 $txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) ) );
 $ipv4_override = get_site_option( 'porkpress_ssl_ipv4_override', '' );
@@ -967,6 +972,10 @@ echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_api_secret">' . esc_html__( 'Porkbun API Secret', 'porkpress-ssl' ) . '</label></th>';
 echo '<td><input name="porkpress_api_secret" type="text" id="porkpress_api_secret" value="' . esc_attr( $api_secret ) . '" class="regular-text"' . ( $api_secret_locked ? ' readonly' : '' ) . ' /></td>';
+echo '</tr>';
+echo '<tr>';
+echo '<th scope="row"><label for="porkpress_api_timeout">' . esc_html__( 'Porkbun API Timeout (seconds)', 'porkpress-ssl' ) . '</label></th>';
+echo '<td><input name="porkpress_api_timeout" type="number" id="porkpress_api_timeout" value="' . esc_attr( $api_timeout ) . '" class="small-text" /></td>';
 echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_cert_name">' . esc_html__( 'Certificate Name', 'porkpress-ssl' ) . '</label></th>';
