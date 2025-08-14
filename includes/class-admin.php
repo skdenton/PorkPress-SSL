@@ -246,19 +246,73 @@ class Admin {
                        return;
                }
 
-               require_once ABSPATH . 'wp-admin/includes/class-wp-ms-sites-list-table.php';
+               $service = new Domain_Service();
+               $notice  = '';
+               $class   = 'notice-success';
 
-               add_filter( 'wpmu_blogs_columns', array( $this, 'add_primary_domain_column' ) );
-               add_action( 'manage_sites_custom_column', array( $this, 'manage_primary_domain_column' ), 10, 2 );
+               if ( isset( $_POST['porkpress_create_site_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_create_site_nonce'] ), 'porkpress_create_site' ) ) {
+                       $domain   = isset( $_POST['new_site_domain'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_domain'] ) ) : '';
+                       $title    = isset( $_POST['new_site_title'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_title'] ) ) : '';
+                       $email    = isset( $_POST['new_site_email'] ) ? sanitize_email( wp_unslash( $_POST['new_site_email'] ) ) : '';
+                       $template = isset( $_POST['new_site_template'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_template'] ) ) : '';
 
-               $table = new \WP_MS_Sites_List_Table();
-               $table->prepare_items();
+                       $result = $service->create_site( $domain, $title, $email, $template );
+                       if ( is_wp_error( $result ) ) {
+                               $class  = 'notice-error';
+                               $notice = $result->get_error_message();
+                       } else {
+                               $notice = __( 'Site created.', 'porkpress-ssl' );
+                       }
+               }
+
+               echo '<div class="wrap">';
+
+               if ( $notice ) {
+                       printf( '<div class="notice %1$s"><p>%2$s</p></div>', esc_attr( $class ), esc_html( $notice ) );
+               }
+
+               $sites = get_sites( array( 'number' => 0 ) );
+               echo '<table class="widefat fixed striped">';
+               echo '<thead><tr><th>' . esc_html__( 'ID', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Site', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Primary Domain', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
+
+               if ( empty( $sites ) ) {
+                       echo '<tr><td colspan="4">' . esc_html__( 'No sites found.', 'porkpress-ssl' ) . '</td></tr>';
+               } else {
+                       foreach ( $sites as $site ) {
+                               $site_id   = (int) $site->blog_id;
+                               $name      = get_blog_option( $site_id, 'blogname' );
+                               $aliases   = $service->get_aliases( $site_id );
+                               $primary   = '';
+                               foreach ( $aliases as $alias ) {
+                                       if ( ! empty( $alias['is_primary'] ) ) {
+                                               $primary = $alias['domain'];
+                                               break;
+                                       }
+                               }
+                               $manage_url = network_admin_url( 'admin.php?page=porkpress-site-aliases&id=' . $site_id );
+                               echo '<tr>';
+                               echo '<td>' . esc_html( $site_id ) . '</td>';
+                               echo '<td>' . esc_html( $name ) . '</td>';
+                               echo '<td>' . ( $primary ? esc_html( $primary ) : '&mdash;' ) . '</td>';
+                               echo '<td><a href="' . esc_url( $manage_url ) . '">' . esc_html__( 'Manage Domains', 'porkpress-ssl' ) . '</a></td>';
+                               echo '</tr>';
+                       }
+               }
+
+               echo '</tbody></table>';
+
+               echo '<h2>' . esc_html__( 'Add New Site', 'porkpress-ssl' ) . '</h2>';
                echo '<form method="post">';
-               $table->display();
+               wp_nonce_field( 'porkpress_create_site', 'porkpress_create_site_nonce' );
+               echo '<table class="form-table" role="presentation">';
+               echo '<tr><th scope="row"><label for="new-site-domain">' . esc_html__( 'Domain', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_domain" type="text" id="new-site-domain" class="regular-text" required /></td></tr>';
+               echo '<tr><th scope="row"><label for="new-site-title">' . esc_html__( 'Title', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_title" type="text" id="new-site-title" class="regular-text" required /></td></tr>';
+               echo '<tr><th scope="row"><label for="new-site-email">' . esc_html__( 'Admin Email', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_email" type="email" id="new-site-email" class="regular-text" required /></td></tr>';
+               echo '<tr><th scope="row"><label for="new-site-template">' . esc_html__( 'Template', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_template" type="text" id="new-site-template" class="regular-text" /></td></tr>';
+               echo '</table>';
+               submit_button( __( 'Create Site', 'porkpress-ssl' ) );
                echo '</form>';
-
-               remove_filter( 'wpmu_blogs_columns', array( $this, 'add_primary_domain_column' ) );
-               remove_action( 'manage_sites_custom_column', array( $this, 'manage_primary_domain_column' ), 10 );
+               echo '</div>';
        }
 
        /**
@@ -424,30 +478,40 @@ class Admin {
                 }
 
                 $domains = $result['domains'] ?? array();
-                $domains = array_filter(
-                        $domains,
-                        function ( $domain ) use ( $search, $status, $expiry_window ) {
-                                $name = $domain['domain'] ?? $domain['name'] ?? '';
-                                if ( $search && false === stripos( $name, $search ) ) {
-                                        return false;
-                                }
+               $known   = array();
+               foreach ( $domains as $d ) {
+                       $known[ strtolower( $d['domain'] ?? $d['name'] ?? '' ) ] = true;
+               }
+               foreach ( $alias_map as $name => $alias ) {
+                       if ( ! isset( $known[ $name ] ) ) {
+                               $domains[]       = array( 'domain' => $alias['domain'] );
+                               $known[ $name ] = true;
+                       }
+               }
+               $domains = array_filter(
+                       $domains,
+                       function ( $domain ) use ( $search, $status, $expiry_window ) {
+                               $name = $domain['domain'] ?? $domain['name'] ?? '';
+                               if ( $search && false === stripos( $name, $search ) ) {
+                                       return false;
+                               }
 
-                                $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
-                                if ( $status && 0 !== strcasecmp( $dns_status, $status ) ) {
-                                        return false;
-                                }
+                               $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
+                               if ( $status && 0 !== strcasecmp( $dns_status, $status ) ) {
+                                       return false;
+                               }
 
-                                if ( $expiry_window > 0 ) {
-                                        $expiry = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
-                                        $time   = strtotime( $expiry );
-                                        if ( $time && $time - time() > $expiry_window * DAY_IN_SECONDS ) {
-                                                return false;
-                                        }
-                                }
+                               if ( $expiry_window > 0 ) {
+                                       $expiry = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
+                                       $time   = strtotime( $expiry );
+                                       if ( $time && $time - time() > $expiry_window * DAY_IN_SECONDS ) {
+                                               return false;
+                                       }
+                               }
 
-                                return true;
-                        }
-                );
+                               return true;
+                       }
+               );
 
                 echo '<form method="get">';
                 echo '<input type="hidden" name="page" value="porkpress-ssl" />';
@@ -521,7 +585,14 @@ class Admin {
                echo '<option value="attach">' . esc_html__( 'Attach to site', 'porkpress-ssl' ) . '</option>';
                echo '<option value="detach">' . esc_html__( 'Detach from site', 'porkpress-ssl' ) . '</option>';
                echo '</select> ';
-               echo '<input type="text" name="site_name" class="regular-text" placeholder="' . esc_attr__( 'Site Name', 'porkpress-ssl' ) . '" /> ';
+               echo '<input type="text" name="site_name" class="regular-text" list="porkpress-site-list" placeholder="' . esc_attr__( 'Site Name', 'porkpress-ssl' ) . '" /> ';
+               $site_list = get_sites( array( 'number' => 0 ) );
+               echo '<datalist id="porkpress-site-list">';
+               foreach ( $site_list as $s ) {
+                       $label = get_blog_option( (int) $s->blog_id, 'blogname' );
+                       echo '<option value="' . esc_attr( $label ) . '"></option>';
+               }
+               echo '</datalist>';
                submit_button( __( 'Apply', 'porkpress-ssl' ), 'secondary', 'apply', false );
                echo '</div>';
                echo '<div id="porkpress-domain-progress" class="alignleft actions"></div>';
