@@ -150,6 +150,7 @@ class DomainServiceTest extends TestCase {
                 }
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
+            public function get_records( string $domain ) { return [ 'records' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
@@ -159,8 +160,9 @@ class DomainServiceTest extends TestCase {
             }
         };
 
+        $service->refresh_domains();
         $result = $service->list_domains();
-        $domain = $result['domains'][0];
+        $domain = $result['root_domains'][0];
 
         $this->assertArrayHasKey( 'type', $domain );
         $this->assertArrayHasKey( 'expiry', $domain );
@@ -182,6 +184,7 @@ class DomainServiceTest extends TestCase {
                 }
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
+            public function get_records( string $domain ) { return [ 'records' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
@@ -191,6 +194,7 @@ class DomainServiceTest extends TestCase {
             }
         };
 
+        $service->refresh_domains();
         $service->list_domains();
         $service->list_domains();
 
@@ -211,13 +215,15 @@ class DomainServiceTest extends TestCase {
                 }
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
+            public function get_records( string $domain ) { return [ 'records' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
         };
 
-        $result  = $service->list_domains( 1, 1 );
+        $service->refresh_domains( 1, 1 );
+        $result  = $service->list_domains();
         $domains = array_column( $result['domains'], 'domain' );
 
         $this->assertSame( [ 'one.com', 'two.com' ], $domains );
@@ -232,13 +238,14 @@ class DomainServiceTest extends TestCase {
                 $this->calls++;
                 return [ 'status' => 'SUCCESS', 'domains' => [ [ 'domain' => 'dup.com' ] ] ];
             }
+            public function get_records( string $domain ) { return [ 'records' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
         };
 
-        $result = $service->list_domains();
+        $result = $service->refresh_domains();
         $this->assertInstanceOf( \PorkPress\SSL\Porkbun_Client_Error::class, $result );
         $this->assertSame( 'duplicate_page', $result->code );
         $this->assertSame( 2, $mock->calls );
@@ -678,7 +685,8 @@ class DomainServiceTest extends TestCase {
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
         };
 
-        $result  = $service->list_domains( 1, 100, true );
+        $service->refresh_domains();
+        $result  = $service->list_domains();
         $domains = array_column( $result['domains'], 'domain' );
 
         $this->assertContains( 'adynton.net', $domains );
