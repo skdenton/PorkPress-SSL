@@ -695,6 +695,46 @@ class DomainServiceTest extends TestCase {
         );
     }
 
+    public function testDeleteARecordForSubdomainRemovesOnlyMatchingEntries() {
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $deleted = [];
+            public array $domains = [];
+            public function __construct() {}
+            public function get_records( string $domain ) {
+                $this->domains[] = $domain;
+                return array( 'records' => array(
+                    array( 'id' => 1, 'name' => 'sub', 'type' => 'A', 'content' => '1.1.1.1' ),
+                    array( 'id' => 2, 'name' => 'sub', 'type' => 'AAAA', 'content' => '::1' ),
+                    array( 'id' => 3, 'name' => 'sub', 'type' => 'A', 'content' => '2.2.2.2' ),
+                    array( 'id' => 4, 'name' => '', 'type' => 'A', 'content' => '1.1.1.1' ),
+                    array( 'id' => 5, 'name' => 'foo', 'type' => 'A', 'content' => '1.1.1.1' ),
+                ) );
+            }
+            public function delete_record( string $domain, int $record_id ) {
+                $this->deleted[] = [ $domain, $record_id ];
+                return array( 'status' => 'SUCCESS' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+            protected function get_network_ipv6(): string { return '::1'; }
+            public function call_delete( $domain, $site_id ) { return $this->delete_a_record( $domain, $site_id ); }
+        };
+
+        $service->call_delete( 'sub.example.com', 2 );
+
+        $this->assertSame( array( 'example.com' ), $client->domains );
+        $this->assertEquals(
+            [
+                [ 'example.com', 1 ],
+                [ 'example.com', 2 ],
+            ],
+            $client->deleted
+        );
+    }
+
     public function testListDomainsIncludesSubdomains() {
         $mock = new class extends \PorkPress\SSL\Porkbun_Client {
             public int $calls = 0;
