@@ -1197,14 +1197,15 @@ UNIQUE KEY domain (domain)
    *
    * @param string $domain Domain name.
    *
-   * @return bool True if the domain exists and is active, false otherwise.
+   * @return bool True if the domain exists and is active, false otherwise. Logs and returns
+   *              false if the API request fails.
    */
   public function is_domain_active( string $domain ): bool {
        $result = $this->client->get_domain( $domain );
 
        if ( $result instanceof Porkbun_Client_Error ) {
-               // If the API fails, assume active to avoid false positives.
-               return true;
+               Logger::error( 'get_domain', array( 'domain' => $domain ), $result->message );
+               return false;
        }
 
        if ( ! is_array( $result ) ) {
