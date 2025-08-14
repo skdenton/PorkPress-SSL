@@ -165,6 +165,8 @@ register_deactivation_hook( __FILE__, 'porkpress_ssl_deactivate' );
 function porkpress_ssl_init() {
         global $wpdb;
 
+	load_plugin_textdomain( 'porkpress-ssl', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+
        $table_name = \PorkPress\SSL\Logger::get_table_name();
        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
                \PorkPress\SSL\Logger::create_table();
