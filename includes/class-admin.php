@@ -27,10 +27,13 @@ class Admin {
                 add_action( 'network_admin_menu', array( $this, 'register_site_alias_page' ) );
                 add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
                add_action( 'wp_ajax_porkpress_ssl_bulk_action', array( $this, 'handle_bulk_action' ) );
+               add_action( 'wp_ajax_porkpress_dns_add', array( $this, 'handle_dns_add' ) );
+               add_action( 'wp_ajax_porkpress_dns_edit', array( $this, 'handle_dns_edit' ) );
+               add_action( 'wp_ajax_porkpress_dns_delete', array( $this, 'handle_dns_delete' ) );
                add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                add_action( 'network_admin_notices', array( $this, 'sunrise_notice' ) );
                add_filter( 'network_edit_site_nav_links', array( $this, 'add_site_nav_link' ) );
-        }
+       }
 
        /**
         * Display a notice if SUNRISE is not enabled.
@@ -751,17 +754,7 @@ class Admin {
         */
        private function render_domain_details( string $domain ) {
                $service = new Domain_Service();
-               $data    = array();
-               $result  = $service->list_domains();
-               if ( ! ( $result instanceof Porkbun_Client_Error ) ) {
-                       foreach ( $result['domains'] ?? array() as $info ) {
-                               $name = $info['domain'] ?? $info['name'] ?? '';
-                               if ( 0 === strcasecmp( $name, $domain ) ) {
-                                       $data = $info;
-                                       break;
-                               }
-                       }
-               }
+               $data    = $this->get_domain_info( $service, $domain );
 
                echo '<h2>' . esc_html( $domain ) . '</h2>';
                if ( empty( $data ) ) {
@@ -769,6 +762,26 @@ class Admin {
                        echo '<p><a href="' . esc_url( remove_query_arg( 'domain' ) ) . '">&larr; ' . esc_html__( 'Back to Domains', 'porkpress-ssl' ) . '</a></p>';
                        return;
                }
+
+               wp_enqueue_script(
+                       'porkpress-domain-dns-details',
+                       set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-details.js', 'https' ),
+                       array( 'jquery' ),
+                       PORKPRESS_SSL_VERSION,
+                       true
+               );
+               wp_set_script_translations( 'porkpress-domain-dns-details', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+               wp_localize_script( 'porkpress-domain-dns-details', 'porkpressDNS', array(
+                       'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                       'nonce'   => wp_create_nonce( 'porkpress_dns_action' ),
+                       'domain'  => $domain,
+                       'i18n'    => array(
+                               'add'          => __( 'Add', 'porkpress-ssl' ),
+                               'update'       => __( 'Update', 'porkpress-ssl' ),
+                               'delete'       => __( 'Delete', 'porkpress-ssl' ),
+                               'confirmDelete'=> __( 'Delete this record?', 'porkpress-ssl' ),
+                       ),
+               ) );
 
                $status = $data['status'] ?? $data['dnsstatus'] ?? '';
                $expiry = $data['expiry'] ?? $data['expiration'] ?? $data['exdate'] ?? '';
@@ -789,19 +802,125 @@ class Admin {
                        echo '</ul>';
                }
 
-               if ( ! empty( $data['dns'] ) && is_array( $data['dns'] ) ) {
-                       echo '<h3>' . esc_html__( 'DNS Records', 'porkpress-ssl' ) . '</h3>';
-                       echo '<table class="widefat"><thead><tr><th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Content', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
-                       foreach ( $data['dns'] as $rec ) {
-                               $type    = $rec['type'] ?? '';
-                               $rname   = $rec['name'] ?? '';
-                               $content = $rec['content'] ?? '';
-                               echo '<tr><td>' . esc_html( $type ) . '</td><td>' . esc_html( $rname ) . '</td><td>' . esc_html( $content ) . '</td></tr>';
-                       }
-                       echo '</tbody></table>';
+               $records = $data['dns'] ?? array();
+               echo '<h3>' . esc_html__( 'DNS Records', 'porkpress-ssl' ) . '</h3>';
+               echo '<table class="widefat" id="porkpress-dns-records"><thead><tr><th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Content', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'TTL', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
+               foreach ( $records as $rec ) {
+                       $type    = $rec['type'] ?? '';
+                       $rname   = $rec['name'] ?? '';
+                       $content = $rec['content'] ?? '';
+                       $ttl     = isset( $rec['ttl'] ) ? (int) $rec['ttl'] : 300;
+                       $rid     = isset( $rec['id'] ) ? (int) $rec['id'] : 0;
+                       echo '<tr data-id="' . esc_attr( $rid ) . '"><td><input type="text" class="dns-type" value="' . esc_attr( $type ) . '" /></td><td><input type="text" class="dns-name" value="' . esc_attr( $rname ) . '" /></td><td><input type="text" class="dns-content" value="' . esc_attr( $content ) . '" /></td><td><input type="number" class="dns-ttl" value="' . esc_attr( $ttl ) . '" /></td><td><button class="button dns-update">' . esc_html__( 'Update', 'porkpress-ssl' ) . '</button> <button class="button dns-delete">' . esc_html__( 'Delete', 'porkpress-ssl' ) . '</button></td></tr>';
                }
+               echo '<tr class="dns-add"><td><input type="text" class="dns-type" /></td><td><input type="text" class="dns-name" /></td><td><input type="text" class="dns-content" /></td><td><input type="number" class="dns-ttl" value="300" /></td><td><button class="button dns-add-btn">' . esc_html__( 'Add', 'porkpress-ssl' ) . '</button></td></tr>';
+               echo '</tbody></table>';
 
                echo '<p><a href="' . esc_url( remove_query_arg( 'domain' ) ) . '">&larr; ' . esc_html__( 'Back to Domains', 'porkpress-ssl' ) . '</a></p>';
+       }
+
+       /**
+        * Retrieve domain information from the cached domain list.
+        *
+        * @param Domain_Service $service Domain service instance.
+        * @param string         $domain  Domain name.
+        * @return array Domain data or empty array if not found.
+        */
+       private function get_domain_info( Domain_Service $service, string $domain ): array {
+               $data   = array();
+               $result = $service->list_domains();
+               if ( ! ( $result instanceof Porkbun_Client_Error ) ) {
+                       foreach ( $result['domains'] ?? array() as $info ) {
+                               $name = $info['domain'] ?? $info['name'] ?? '';
+                               if ( 0 === strcasecmp( $name, $domain ) ) {
+                                       $data = $info;
+                                       break;
+                               }
+                       }
+               }
+               return is_array( $data ) ? $data : array();
+       }
+
+       /**
+        * AJAX handler to add a DNS record.
+        */
+       public function handle_dns_add() {
+               check_ajax_referer( 'porkpress_dns_action', 'nonce' );
+
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       wp_send_json_error( 'no_permission' );
+               }
+
+               $domain  = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
+               $type    = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
+               $name    = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
+               $content = isset( $_POST['content'] ) ? sanitize_text_field( wp_unslash( $_POST['content'] ) ) : '';
+               $ttl     = isset( $_POST['ttl'] ) ? (int) $_POST['ttl'] : 300;
+
+               $service = new Domain_Service();
+               $result  = $service->add_dns_record( $domain, $type, $name, $content, $ttl );
+
+               if ( $result instanceof Porkbun_Client_Error || is_wp_error( $result ) ) {
+                       $message = $result instanceof Porkbun_Client_Error ? $result->message : $result->get_error_message();
+                       wp_send_json_error( $message );
+               }
+
+               $records = $this->get_domain_info( $service, $domain )['dns'] ?? array();
+               wp_send_json_success( array( 'records' => $records ) );
+       }
+
+       /**
+        * AJAX handler to edit a DNS record.
+        */
+       public function handle_dns_edit() {
+               check_ajax_referer( 'porkpress_dns_action', 'nonce' );
+
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       wp_send_json_error( 'no_permission' );
+               }
+
+               $domain    = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
+               $record_id = isset( $_POST['record_id'] ) ? (int) $_POST['record_id'] : 0;
+               $type      = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
+               $name      = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
+               $content   = isset( $_POST['content'] ) ? sanitize_text_field( wp_unslash( $_POST['content'] ) ) : '';
+               $ttl       = isset( $_POST['ttl'] ) ? (int) $_POST['ttl'] : 300;
+
+               $service = new Domain_Service();
+               $result  = $service->update_dns_record( $domain, $record_id, $type, $name, $content, $ttl );
+
+               if ( $result instanceof Porkbun_Client_Error || is_wp_error( $result ) ) {
+                       $message = $result instanceof Porkbun_Client_Error ? $result->message : $result->get_error_message();
+                       wp_send_json_error( $message );
+               }
+
+               $records = $this->get_domain_info( $service, $domain )['dns'] ?? array();
+               wp_send_json_success( array( 'records' => $records ) );
+       }
+
+       /**
+        * AJAX handler to delete a DNS record.
+        */
+       public function handle_dns_delete() {
+               check_ajax_referer( 'porkpress_dns_action', 'nonce' );
+
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       wp_send_json_error( 'no_permission' );
+               }
+
+               $domain    = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
+               $record_id = isset( $_POST['record_id'] ) ? (int) $_POST['record_id'] : 0;
+
+               $service = new Domain_Service();
+               $result  = $service->delete_dns_record( $domain, $record_id );
+
+               if ( $result instanceof Porkbun_Client_Error || is_wp_error( $result ) ) {
+                       $message = $result instanceof Porkbun_Client_Error ? $result->message : $result->get_error_message();
+                       wp_send_json_error( $message );
+               }
+
+               $records = $this->get_domain_info( $service, $domain )['dns'] ?? array();
+               wp_send_json_success( array( 'records' => $records ) );
        }
 
        /**
