@@ -153,11 +153,32 @@ return $encode ? $context_json : $data;
 }
 
 $secrets = array( 'api_key', 'api_secret', 'key', 'secret', 'password' );
+
+$sanitize = function ( &$arr ) use ( &$sanitize, $secrets ) {
 foreach ( $secrets as $secret ) {
-if ( array_key_exists( $secret, $data ) ) {
-unset( $data[ $secret ] );
+if ( array_key_exists( $secret, $arr ) ) {
+unset( $arr[ $secret ] );
 }
 }
+
+foreach ( $arr as $key => &$value ) {
+if ( is_array( $value ) ) {
+$sanitize( $value );
+} elseif ( is_string( $value ) ) {
+$is_email = false;
+if ( function_exists( 'is_email' ) ) {
+$is_email = (bool) is_email( $value );
+} else {
+$is_email = false !== filter_var( $value, FILTER_VALIDATE_EMAIL );
+}
+if ( $is_email ) {
+unset( $arr[ $key ] );
+}
+}
+}
+};
+
+$sanitize( $data );
 
 if ( ! $encode ) {
 return $data;
