@@ -204,30 +204,30 @@ class Porkbun_Client {
        }
 
        /**
-        * Retrieve DNS records by name and type.
+        * Retrieve DNS records by subdomain and type.
         */
-       public function retrieve_by_name_type( string $domain, string $name, string $type ) {
-		$name = sanitize_text_field( $name );
+       public function retrieve_by_name_type( string $domain, string $subdomain, string $type ) {
+                $subdomain = sanitize_text_field( $subdomain );
 
-               return $this->request( "dns/retrieveByNameType/{$domain}", [
-                       'name' => $name,
-                       'type' => $type,
-               ] );
+               return $this->request( "dns/retrieveByNameType/{$domain}/{$type}/{$subdomain}", [] );
        }
 
        /**
-        * Edit or create a DNS record by name and type.
+        * Edit or create a DNS record by subdomain and type.
         */
-       public function edit_by_name_type( string $domain, string $name, string $type, string $content, int $ttl = 300 ) {
-		$name    = sanitize_text_field( $name );
-		$content = sanitize_text_field( $content );
+       public function edit_by_name_type( string $domain, string $subdomain, string $type, string $content, ?int $ttl = null ) {
+                $subdomain = sanitize_text_field( $subdomain );
+                $content   = sanitize_text_field( $content );
 
-               return $this->request( "dns/editByNameType/{$domain}", [
-                       'name'    => $name,
-                       'type'    => $type,
-                       'content' => $content,
-                       'ttl'     => $ttl,
-               ] );
+                $payload = [
+                        'content' => $content,
+                ];
+
+                if ( null !== $ttl ) {
+                        $payload['ttl'] = $ttl;
+                }
+
+               return $this->request( "dns/editByNameType/{$domain}/{$type}/{$subdomain}", $payload );
        }
 
        /**
