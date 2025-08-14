@@ -209,37 +209,98 @@ class Porkbun_Client {
        /**
         * Create a DNS record of any type. Default TTL is 600 seconds.
         *
+        * Accepted record types: A, AAAA, CNAME, TXT, MX, SRV, NS, PTR, CAA, ALIAS.
+        * Optional fields:
+        * - ttl (int): Time to live in seconds.
+        * - prio (int): Priority for MX and SRV records.
+        *
         * The {@see $name} parameter should be empty for apex records and contain
         * only the subdomain portion for others.
         *
         * Uses Porkbun's v3 DNS create endpoint: `/api/json/v3/dns/create/{domain}`.
         */
-       public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 600 ) {
+       public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 600, ?int $prio = null ) {
+               $type    = strtoupper( sanitize_text_field( $type ) );
                $name    = sanitize_text_field( $name );
                $content = sanitize_text_field( $content );
 
-               // Hitting Porkbun v3 DNS create endpoint.
-               return $this->request( "dns/create/{$domain}", [
+               $error = $this->validate_dns_args( $type, $content, $ttl, $prio );
+               if ( $error instanceof Porkbun_Client_Error ) {
+                       return $error;
+               }
+
+               $payload = [
                        'type'    => $type,
                        'name'    => $name,
                        'content' => $content,
                        'ttl'     => $ttl,
-               ] );
+               ];
+
+               if ( null !== $prio ) {
+                       $payload['prio'] = $prio;
+               }
+
+               // Hitting Porkbun v3 DNS create endpoint.
+               return $this->request( "dns/create/{$domain}", $payload );
        }
 
        /**
         * Edit a DNS record by ID. Default TTL is 600 seconds.
+        *
+        * Accepted record types: A, AAAA, CNAME, TXT, MX, SRV, NS, PTR, CAA, ALIAS.
+        * Optional fields:
+        * - ttl (int): Time to live in seconds.
+        * - prio (int): Priority for MX and SRV records.
         */
-       public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 600 ) {
-		$name    = sanitize_text_field( $name );
-		$content = sanitize_text_field( $content );
+       public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 600, ?int $prio = null ) {
+               $type    = strtoupper( sanitize_text_field( $type ) );
+               $name    = sanitize_text_field( $name );
+               $content = sanitize_text_field( $content );
 
-               return $this->request( "dns/edit/{$domain}/{$record_id}", [
+               $error = $this->validate_dns_args( $type, $content, $ttl, $prio );
+               if ( $error instanceof Porkbun_Client_Error ) {
+                       return $error;
+               }
+
+               $payload = [
                        'type'    => $type,
                        'name'    => $name,
                        'content' => $content,
                        'ttl'     => $ttl,
-               ] );
+               ];
+
+               if ( null !== $prio ) {
+                       $payload['prio'] = $prio;
+               }
+
+               return $this->request( "dns/edit/{$domain}/{$record_id}", $payload );
+       }
+
+       /**
+        * Validate DNS record arguments.
+        *
+        * @return Porkbun_Client_Error|null Error if validation fails, null otherwise.
+        */
+       private function validate_dns_args( string $type, string $content, $ttl, $prio = null ) {
+               $allowed_types = array( 'A', 'AAAA', 'CNAME', 'TXT', 'MX', 'SRV', 'NS', 'PTR', 'CAA', 'ALIAS' );
+
+               if ( ! in_array( $type, $allowed_types, true ) ) {
+                       return new Porkbun_Client_Error( 'invalid_type', 'Invalid DNS record type.' );
+               }
+
+               if ( '' === trim( $content ) ) {
+                       return new Porkbun_Client_Error( 'invalid_content', 'DNS record content cannot be empty.' );
+               }
+
+               if ( ! is_int( $ttl ) ) {
+                       return new Porkbun_Client_Error( 'invalid_ttl', 'TTL must be an integer.' );
+               }
+
+               if ( null !== $prio && ! is_int( $prio ) ) {
+                       return new Porkbun_Client_Error( 'invalid_prio', 'Priority must be an integer.' );
+               }
+
+               return null;
        }
 
        /**
