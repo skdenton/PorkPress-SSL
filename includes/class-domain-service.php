@@ -499,11 +499,23 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
             $records = $this->client->get_records( $root );
             if ( $records instanceof Porkbun_Client_Error ) {
-                $domain_info['dns'] = array();
+                $domain_info['dns']         = array();
+                $domain_info['nameservers'] = array();
+                $domain_info['details']     = array();
                 continue;
             }
 
             $domain_info['dns'] = $records['records'] ?? array();
+
+            $detail = $this->client->get_domain( $root );
+            if ( $detail instanceof Porkbun_Client_Error ) {
+                $domain_info['nameservers'] = array();
+                $domain_info['details']     = array();
+            } else {
+                $info                        = $detail['domain'] ?? $detail;
+                $domain_info['details']      = $info;
+                $domain_info['nameservers']  = $info['ns'] ?? array();
+            }
 
             $seen = array();
             foreach ( $domain_info['dns'] as $rec ) {
@@ -518,9 +530,12 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                 }
                 $seen[ $key ] = true;
                 $extra[]      = array(
-                    'domain' => $fqdn,
-                    'status' => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
-                    'expiry' => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+                    'domain'      => $fqdn,
+                    'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
+                    'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+                    'dns'         => array( $rec ),
+                    'nameservers' => $domain_info['nameservers'] ?? array(),
+                    'details'     => $domain_info['details'] ?? array(),
                 );
             }
         }

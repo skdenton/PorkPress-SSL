@@ -116,6 +116,7 @@ class ReconcilerTest extends TestCase {
             public function get_records( string $domain ) {
                 return array( 'records' => array() );
             }
+            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
@@ -176,6 +177,7 @@ class ReconcilerTest extends TestCase {
             public function get_records( string $domain ) {
                 return array( 'records' => array() );
             }
+            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
@@ -227,6 +229,7 @@ class ReconcilerTest extends TestCase {
                 }
                 return array( 'records' => array() );
             }
+            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {

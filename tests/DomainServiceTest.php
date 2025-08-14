@@ -151,6 +151,7 @@ class DomainServiceTest extends TestCase {
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
             public function get_records( string $domain ) { return [ 'records' => [] ]; }
+            public function get_domain( string $domain ) { return [ 'status' => 'SUCCESS', 'domain' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
@@ -185,6 +186,7 @@ class DomainServiceTest extends TestCase {
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
             public function get_records( string $domain ) { return [ 'records' => [] ]; }
+            public function get_domain( string $domain ) { return [ 'status' => 'SUCCESS', 'domain' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
@@ -216,6 +218,7 @@ class DomainServiceTest extends TestCase {
                 return [ 'status' => 'SUCCESS', 'domains' => [] ];
             }
             public function get_records( string $domain ) { return [ 'records' => [] ]; }
+            public function get_domain( string $domain ) { return [ 'status' => 'SUCCESS', 'domain' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
@@ -239,6 +242,7 @@ class DomainServiceTest extends TestCase {
                 return [ 'status' => 'SUCCESS', 'domains' => [ [ 'domain' => 'dup.com' ] ] ];
             }
             public function get_records( string $domain ) { return [ 'records' => [] ]; }
+            public function get_domain( string $domain ) { return [ 'status' => 'SUCCESS', 'domain' => [] ]; }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
@@ -679,6 +683,7 @@ class DomainServiceTest extends TestCase {
             public function get_records( string $domain ) {
                 return array( 'records' => array( array( 'type' => 'A', 'name' => 'dev', 'content' => '1.2.3.4' ) ) );
             }
+            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
@@ -709,6 +714,7 @@ class DomainServiceTest extends TestCase {
             public function get_records( string $domain ) {
                 return array( 'records' => array( array( 'type' => 'CNAME', 'name' => '@', 'content' => 'target.test' ) ) );
             }
+            public function get_domain( string $domain ) { return array( 'status' => 'SUCCESS', 'domain' => array() ); }
         };
 
         $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
