@@ -468,7 +468,8 @@ class Admin {
                echo '<p><a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'mapping-csv' ) ) ) . '">' . esc_html__( 'Export Mapping CSV', 'porkpress-ssl' ) . '</a> ';
                echo '<a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'mapping-json' ) ) ) . '">' . esc_html__( 'Export Mapping JSON', 'porkpress-ssl' ) . '</a></p>';
 
-               wp_enqueue_script( 'porkpress-domain-bulk', plugins_url( '../assets/domain-bulk.js', __FILE__ ), array( 'jquery' ), PORKPRESS_SSL_VERSION, true );
+               wp_enqueue_script( 'porkpress-domain-bulk', plugins_url( '../assets/domain-bulk.js', __FILE__ ), array( 'jquery', 'wp-i18n' ), PORKPRESS_SSL_VERSION, true );
+               wp_set_script_translations( 'porkpress-domain-bulk', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
                wp_localize_script( 'porkpress-domain-bulk', 'porkpressBulk', array(
                        'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                        'nonce'   => wp_create_nonce( 'porkpress_ssl_bulk_action' ),
