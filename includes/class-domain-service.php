@@ -411,12 +411,13 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
      *
      * @return array|Porkbun_Client_Error
      */
-    public function list_domains( int $page = 1, int $per_page = 100 ) {
-        if ( null !== $this->domain_list_cache ) {
+    public function list_domains( int $page = 1, int $per_page = 100, bool $include_dns = false ) {
+        if ( ! $include_dns && null !== $this->domain_list_cache ) {
             return $this->domain_list_cache;
         }
 
-        if ( function_exists( 'get_site_transient' ) ) {
+        $cached = false;
+        if ( ! $include_dns && function_exists( 'get_site_transient' ) ) {
             $cached = get_site_transient( self::DOMAIN_LIST_CACHE_KEY );
             if ( false !== $cached ) {
                 $this->domain_list_cache = $cached;
@@ -486,9 +487,43 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
             'domains' => $all_domains,
         );
 
+        if ( $include_dns ) {
+            $extra = array();
+            foreach ( $all_domains as $domain_info ) {
+                $root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
+                if ( ! $root ) {
+                    continue;
+                }
+                $records = $this->client->get_records( $root );
+                if ( $records instanceof Porkbun_Client_Error ) {
+                    continue;
+                }
+                $seen = array();
+                foreach ( $records['records'] ?? array() as $rec ) {
+                    $name = $rec['name'] ?? '';
+                    if ( '' === $name || '@' === $name ) {
+                        continue;
+                    }
+                    $fqdn = $name . '.' . $root;
+                    $key  = strtolower( $fqdn );
+                    if ( isset( $seen[ $key ] ) ) {
+                        continue;
+                    }
+                    $seen[ $key ] = true;
+                    $extra[]      = array(
+                        'domain' => $fqdn,
+                        'status' => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
+                        'expiry' => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+                    );
+                }
+            }
+            $final['domains'] = array_merge( $final['domains'], $extra );
+            return $final;
+        }
+
         $this->domain_list_cache = $final;
 
-        if ( function_exists( 'set_site_transient' ) ) {
+        if ( ! $cached && function_exists( 'set_site_transient' ) ) {
             set_site_transient( self::DOMAIN_LIST_CACHE_KEY, $final, self::DOMAIN_LIST_CACHE_TTL );
         }
 

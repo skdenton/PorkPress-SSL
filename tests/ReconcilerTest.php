@@ -57,6 +57,9 @@ class ReconcilerTest extends TestCase {
             public function get_domain( string $domain ) {
                 return [ 'status' => 'SUCCESS', 'domain' => [ 'status' => 'INACTIVE' ] ];
             }
+            public function get_records( string $domain ) {
+                return array( 'records' => array() );
+            }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
@@ -109,6 +112,9 @@ class ReconcilerTest extends TestCase {
                         array( 'domain' => 'extra.com', 'status' => 'ACTIVE' ),
                     ),
                 );
+            }
+            public function get_records( string $domain ) {
+                return array( 'records' => array() );
             }
         };
 
@@ -166,6 +172,9 @@ class ReconcilerTest extends TestCase {
                     ),
                 );
             }
+            public function get_records( string $domain ) {
+                return array( 'records' => array() );
+            }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
@@ -192,6 +201,44 @@ class ReconcilerTest extends TestCase {
         $this->assertNotEmpty( $result['missing_aliases'] );
         $this->assertNotEmpty( $result['stray_aliases'] );
         $this->assertNotEmpty( $result['disabled_sites'] );
+    }
+
+    public function testReconcileAllIncludesSubdomains() {
+        global $wpdb, $mock_sites, $site_meta;
+        $wpdb      = new MockWpdb();
+        $mock_sites = array( 1 => array( 'archived' => 0 ) );
+        $site_meta  = array( 1 => array( 'porkpress_domain' => 'dev.adynton.net' ) );
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public int $calls = 0;
+            public function __construct() {}
+            public function list_domains( int $page = 1, int $per_page = 100 ) {
+                $this->calls++;
+                if ( 1 === $this->calls ) {
+                    return array( 'status' => 'SUCCESS', 'domains' => array( array( 'domain' => 'adynton.net', 'status' => 'ACTIVE' ) ) );
+                }
+                return array( 'status' => 'SUCCESS', 'domains' => array() );
+            }
+            public function get_records( string $domain ) {
+                if ( 'adynton.net' === $domain ) {
+                    return array( 'records' => array( array( 'type' => 'A', 'name' => 'dev', 'content' => '1.2.3.4' ) ) );
+                }
+                return array( 'records' => array() );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
+        };
+
+        $service->add_alias( 1, 'dev.adynton.net', true );
+
+        $reconciler = new \PorkPress\SSL\Reconciler( $service );
+        $result     = $reconciler->reconcile_all();
+
+        $this->assertEmpty( $result['stray_aliases'] );
     }
 }
 
