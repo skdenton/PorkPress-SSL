@@ -106,6 +106,10 @@ if ( ! function_exists( 'apply_filters' ) ) {
             global $porkpress_txt_resolver_filter;
             return $porkpress_txt_resolver_filter ?? $value;
         }
+        if ( 'porkpress_ssl_add_www_cname' === $tag ) {
+            global $porkpress_add_www_cname;
+            return $porkpress_add_www_cname ?? $value;
+        }
         return $value;
     }
 }
@@ -401,7 +405,7 @@ class DomainServiceTest extends TestCase {
         $this->assertContains( 'www', $service->names );
     }
 
-    public function testCreateRecordAddsWwwCnameForSubdomain() {
+    public function testCreateRecordDoesNotAddWwwCnameForSubdomainByDefault() {
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
             public function retrieve_by_name_type( string $domain, string $name, string $type ) { return array( 'records' => array() ); }
@@ -422,7 +426,36 @@ class DomainServiceTest extends TestCase {
         };
 
         $service->call_create( 'sub.example.com' );
+        $this->assertNotContains( 'www.sub', $service->names );
+    }
+
+    public function testCreateRecordAddsWwwCnameForSubdomainWhenFilterEnabled() {
+        global $porkpress_add_www_cname;
+        $porkpress_add_www_cname = true;
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public function __construct() {}
+            public function retrieve_by_name_type( string $domain, string $name, string $type ) { throw new \Exception(); }
+            public function edit_by_name_type( string $domain, string $name, string $type, string $content, ?int $ttl = null ) { return array( 'status' => 'SUCCESS' ); }
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) { return array( 'status' => 'SUCCESS' ); }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public array $names = array();
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            protected function ensure_dns_record( string $domain, string $content, int $ttl, string $type, int $site_id, ?string $name_override = null ) {
+                $this->names[] = $name_override ?? '';
+                return true;
+            }
+            protected function get_network_ip(): string { return '1.1.1.1'; }
+            protected function get_network_ipv6(): string { return ''; }
+            public function call_create( string $domain ) { return $this->create_a_record( $domain, 1, 600 ); }
+        };
+
+        $service->call_create( 'sub.example.com' );
         $this->assertContains( 'www.sub', $service->names );
+
+        $porkpress_add_www_cname = null;
     }
 
     public function testAttachToSiteCreatesARecordApex() {
