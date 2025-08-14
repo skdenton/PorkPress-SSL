@@ -1239,7 +1239,7 @@ public function render_site_page() {
                 if ( isset( $_POST['porkpress_ssl_confirm'] ) ) {
                         $requests   = get_site_option( self::REQUESTS_OPTION, array() );
                         $requests[] = array(
-                                'id'            => uniqid( '', true ),
+                                'id'            => wp_generate_uuid4(),
                                 'site_id'       => get_current_blog_id(),
                                 'domain'        => $domain,
                                 'justification' => $justification,
