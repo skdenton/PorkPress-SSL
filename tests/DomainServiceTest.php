@@ -693,6 +693,37 @@ class DomainServiceTest extends TestCase {
         $this->assertContains( 'dev.adynton.net', $domains );
     }
 
+    public function testRefreshDomainsIncludesDnsRecords() {
+        $GLOBALS['porkpress_site_options'] = array();
+
+        $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public int $calls = 0;
+            public function __construct() {}
+            public function list_domains( int $page = 1, int $per_page = 100 ) {
+                $this->calls++;
+                if ( 1 === $this->calls ) {
+                    return array( 'status' => 'SUCCESS', 'domains' => array( array( 'domain' => 'example.com', 'status' => 'ACTIVE' ) ) );
+                }
+                return array( 'status' => 'SUCCESS', 'domains' => array() );
+            }
+            public function get_records( string $domain ) {
+                return array( 'records' => array( array( 'type' => 'CNAME', 'name' => '@', 'content' => 'target.test' ) ) );
+            }
+        };
+
+        $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+        };
+
+        $service->refresh_domains();
+        $result = $service->list_domains();
+        $domain = $result['root_domains'][0];
+
+        $this->assertArrayHasKey( 'dns', $domain );
+        $this->assertSame( 'CNAME', $domain['dns'][0]['type'] );
+        $this->assertSame( 'target.test', $domain['dns'][0]['content'] );
+    }
+
     public function testCheckDnsHealthOkWithMultipleExpectedIps() {
         global $dns_records;
         $dns_records = array(
