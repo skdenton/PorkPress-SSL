@@ -380,4 +380,162 @@ class Porkbun_Client {
 	protected function sleep( float $seconds ): void {
 		usleep( (int) ( $seconds * 1000000 ) );
 	}
+       /**
+        * Ping the Porkbun API.
+        */
+       public function ping() {
+               return $this->request( 'ping', array() );
+       }
+
+       /**
+        * Retrieve pricing information for a TLD.
+        */
+       public function get_pricing( string $tld ) {
+               $tld = strtolower( sanitize_text_field( $tld ) );
+
+               return $this->request( "pricing/get/{$tld}", array() );
+       }
+
+       /**
+        * Update nameservers for a domain.
+        */
+       public function update_nameservers( string $domain, array $nameservers ) {
+               $domain  = strtolower( $domain );
+               $payload = array( 'ns' => array_values( array_map( 'sanitize_text_field', $nameservers ) ) );
+
+               return $this->request( "domain/updateNs/{$domain}", $payload );
+       }
+
+       /**
+        * Add a URL forward.
+        */
+       public function add_url_forward( string $domain, string $subdomain, string $destination, string $type = '302', bool $wildcard = false ) {
+               $domain      = strtolower( $domain );
+               $subdomain   = sanitize_text_field( $subdomain );
+               $destination = sanitize_text_field( $destination );
+
+               $payload = array(
+                       'name'        => $subdomain,
+                       'destination' => $destination,
+                       'type'        => $type,
+               );
+
+               if ( $wildcard ) {
+                       $payload['wildcard'] = '1';
+               }
+
+               return $this->request( "domain/addUrlForward/{$domain}", $payload );
+       }
+
+       /**
+        * Retrieve URL forwarding configuration.
+        */
+       public function get_url_forwarding( string $domain ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "domain/getUrlForwarding/{$domain}", array() );
+       }
+
+       /**
+        * Delete a URL forward by ID.
+        */
+       public function delete_url_forward( string $domain, int $id ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "domain/deleteUrlForward/{$domain}/{$id}", array() );
+       }
+
+       /**
+        * Create a glue record.
+        */
+       public function create_glue_record( string $domain, string $hostname, array $ips ) {
+               $domain   = strtolower( $domain );
+               $hostname = sanitize_text_field( $hostname );
+               $ips      = array_values( array_map( 'sanitize_text_field', $ips ) );
+
+               return $this->request( "domain/createGlue/{$domain}", array( 'hostname' => $hostname, 'ips' => $ips ) );
+       }
+
+       /**
+        * Update a glue record.
+        */
+       public function update_glue_record( string $domain, string $hostname, array $ips ) {
+               $domain   = strtolower( $domain );
+               $hostname = sanitize_text_field( $hostname );
+               $ips      = array_values( array_map( 'sanitize_text_field', $ips ) );
+
+               return $this->request( "domain/updateGlue/{$domain}/{$hostname}", array( 'ips' => $ips ) );
+       }
+
+       /**
+        * Delete a glue record.
+        */
+       public function delete_glue_record( string $domain, string $hostname ) {
+               $domain   = strtolower( $domain );
+               $hostname = sanitize_text_field( $hostname );
+
+               return $this->request( "domain/deleteGlue/{$domain}/{$hostname}", array() );
+       }
+
+       /**
+        * Retrieve glue records for a domain.
+        */
+       public function get_glue_records( string $domain ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "domain/getGlue/{$domain}", array() );
+       }
+
+       /**
+        * Delete DNS records by subdomain and type.
+        */
+       public function delete_by_name_type( string $domain, string $subdomain, string $type ) {
+               $subdomain = sanitize_text_field( $subdomain );
+               $type      = sanitize_text_field( $type );
+
+               return $this->request( "dns/deleteByNameType/{$domain}/{$type}/{$subdomain}", array() );
+       }
+
+       /**
+        * Create DNSSEC DS record.
+        */
+       public function create_dnssec( string $domain, string $key_tag, string $algorithm, string $digest_type, string $digest ) {
+               $domain  = strtolower( $domain );
+               $payload = array(
+                       'keyTag'     => sanitize_text_field( $key_tag ),
+                       'algorithm'  => sanitize_text_field( $algorithm ),
+                       'digestType' => sanitize_text_field( $digest_type ),
+                       'digest'     => sanitize_text_field( $digest ),
+               );
+
+               return $this->request( "dnssec/create/{$domain}", $payload );
+       }
+
+       /**
+        * Retrieve DNSSEC DS records.
+        */
+       public function retrieve_dnssec( string $domain ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "dnssec/retrieve/{$domain}", array() );
+       }
+
+       /**
+        * Delete DNSSEC DS records for a domain.
+        */
+       public function delete_dnssec( string $domain ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "dnssec/delete/{$domain}", array() );
+       }
+
+       /**
+        * Retrieve SSL bundle for a domain.
+        */
+       public function retrieve_ssl_bundle( string $domain ) {
+               $domain = strtolower( $domain );
+
+               return $this->request( "ssl/retrieve/{$domain}", array() );
+       }
+
 }
