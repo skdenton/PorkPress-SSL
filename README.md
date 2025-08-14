@@ -72,6 +72,9 @@ it manages differ for each case:
 * **Subdomain** – `A` and `AAAA` records are created for the subdomain. No
   `www` alias is added by default.
 
+All DNS operations use Porkbun's API v3 endpoints for record
+creation, retrieval, editing and deletion.
+
 ### Optional `www` CNAMEs for subdomains
 
 If a `www` alias should be created for a subdomain such as
@@ -94,6 +97,21 @@ conditional logic:
 add_filter( 'porkpress_ssl_add_www_cname', function( $enabled, $domain ) {
     return $domain === 'shop.example.com';
 }, 10, 2 );
+```
+
+### Editing and deleting records
+
+The bundled Porkbun client provides helpers for modifying or removing
+DNS entries through the v3 API:
+
+```php
+$client = new PorkPress\SSL\Porkbun_Client( 'pk_...', 'sk_...' );
+
+// Update an A record.
+$client->edit_record( 'example.com', 123, 'A', '', '198.51.100.5', 600 );
+
+// Delete the record.
+$client->delete_record( 'example.com', 123 );
 ```
 
 ## Enabling `sunrise.php`
