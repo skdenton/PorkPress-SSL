@@ -94,7 +94,7 @@ class Reconciler {
         );
 
         $porkbun = array();
-        $domains = $this->domains->list_domains( 1, 100, true );
+        $domains = $this->domains->list_domains();
         if ( ! ( $domains instanceof Porkbun_Client_Error ) && ! empty( $domains['domains'] ) ) {
             foreach ( $domains['domains'] as $info ) {
                 if ( ! empty( $info['domain'] ) ) {

@@ -130,6 +130,7 @@ class ReconcilerTest extends TestCase {
         $service->add_alias( 1, 'existing.com', true );
         $service->add_alias( 3, 'stray.com', true );
 
+        $service->refresh_domains();
         $reconciler = new \PorkPress\SSL\Reconciler( $service );
         $result     = $reconciler->reconcile_all();
 
@@ -189,6 +190,7 @@ class ReconcilerTest extends TestCase {
         $service->add_alias( 1, 'existing.com', true );
         $service->add_alias( 3, 'stray.com', true );
 
+        $service->refresh_domains();
         $reconciler = new \PorkPress\SSL\Reconciler( $service );
         $result     = $reconciler->reconcile_all( false );
 
@@ -235,6 +237,7 @@ class ReconcilerTest extends TestCase {
 
         $service->add_alias( 1, 'dev.adynton.net', true );
 
+        $service->refresh_domains();
         $reconciler = new \PorkPress\SSL\Reconciler( $service );
         $result     = $reconciler->reconcile_all();
 
