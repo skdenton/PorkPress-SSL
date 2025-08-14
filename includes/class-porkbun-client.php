@@ -129,10 +129,10 @@ class Porkbun_Client {
                 return $this->request( "dns/retrieve/{$domain}", [] );
         }
 
-	/**
-	 * Create a TXT record.
-	 */
-	public function create_txt_record( string $domain, string $name, string $content, int $ttl = 300 ) {
+       /**
+        * Create a TXT record. Default TTL is 600 seconds.
+        */
+       public function create_txt_record( string $domain, string $name, string $content, int $ttl = 600 ) {
 		$name    = sanitize_text_field( $name );
 		$content = sanitize_text_field( $content );
 
@@ -151,10 +151,10 @@ class Porkbun_Client {
 		return $this->delete_record( $domain, $record_id );
 	}
 
-        /**
-         * Create an A or AAAA record.
-         */
-        public function create_a_record( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+       /**
+        * Create an A or AAAA record. Default TTL is 600 seconds.
+        */
+       public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
 		$name    = sanitize_text_field( $name );
 		$content = sanitize_text_field( $content );
 
@@ -174,9 +174,9 @@ class Porkbun_Client {
        }
 
        /**
-        * Create a DNS record of any type.
+        * Create a DNS record of any type. Default TTL is 600 seconds.
         */
-       public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 300 ) {
+       public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 600 ) {
 		$name    = sanitize_text_field( $name );
 		$content = sanitize_text_field( $content );
 
@@ -189,9 +189,9 @@ class Porkbun_Client {
        }
 
        /**
-        * Edit a DNS record by ID.
+        * Edit a DNS record by ID. Default TTL is 600 seconds.
         */
-       public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 300 ) {
+       public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 600 ) {
 		$name    = sanitize_text_field( $name );
 		$content = sanitize_text_field( $content );
 
