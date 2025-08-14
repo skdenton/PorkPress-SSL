@@ -180,12 +180,12 @@ function porkpress_ssl_init() {
       \PorkPress\SSL\Notifier::register();
       \PorkPress\SSL\Renewal_Service::maybe_schedule();
 
-      if ( is_network_admin() && isset( $_GET['page'] ) && 'porkpress-ssl' === $_GET['page'] ) {
-               add_filter(
-                       'get_site_icon_url',
-                       function ( $url ) {
-                               return set_url_scheme( $url, 'https' );
-                       }
+     if ( is_network_admin() && isset( $_GET['page'] ) && 'porkpress-ssl' === sanitize_key( $_GET['page'] ) ) {
+             add_filter(
+                     'get_site_icon_url',
+                     function ( $url ) {
+                             return set_url_scheme( $url, 'https' );
+                     }
                );
       }
 }
