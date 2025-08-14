@@ -253,16 +253,25 @@ class Admin {
                $class   = 'notice-success';
 
                if ( isset( $_POST['porkpress_create_site_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_create_site_nonce'] ), 'porkpress_create_site' ) ) {
-                       $domain   = isset( $_POST['new_site_domain'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_domain'] ) ) : '';
-                       $title    = isset( $_POST['new_site_title'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_title'] ) ) : '';
-                       $email    = isset( $_POST['new_site_email'] ) ? sanitize_email( wp_unslash( $_POST['new_site_email'] ) ) : '';
-                       $template = isset( $_POST['new_site_template'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_template'] ) ) : '';
+                       $subdomain = isset( $_POST['new_site_subdomain'] ) ? sanitize_title_with_dashes( wp_unslash( $_POST['new_site_subdomain'] ) ) : '';
+                       $root      = isset( $_POST['new_site_domain'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_domain'] ) ) : '';
+                       $domain    = $root;
+                       if ( $subdomain ) {
+                               $domain = $subdomain . '.' . $root;
+                       }
+                       $title     = isset( $_POST['new_site_title'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_title'] ) ) : '';
+                       $email     = isset( $_POST['new_site_email'] ) ? sanitize_email( wp_unslash( $_POST['new_site_email'] ) ) : '';
+                       $template  = isset( $_POST['new_site_template'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_template'] ) ) : '';
+                       $language  = isset( $_POST['new_site_lang'] ) ? sanitize_text_field( wp_unslash( $_POST['new_site_lang'] ) ) : '';
 
                        $result = $service->create_site( $domain, $title, $email, $template );
                        if ( is_wp_error( $result ) ) {
                                $class  = 'notice-error';
                                $notice = $result->get_error_message();
                        } else {
+                               if ( $language ) {
+                                       update_blog_option( (int) $result, 'WPLANG', $language );
+                               }
                                $notice = __( 'Site created.', 'porkpress-ssl' );
                        }
                }
@@ -281,21 +290,38 @@ class Admin {
                        echo '<tr><td colspan="4">' . esc_html__( 'No sites found.', 'porkpress-ssl' ) . '</td></tr>';
                } else {
                        foreach ( $sites as $site ) {
-                               $site_id   = (int) $site->blog_id;
-                               $name      = get_blog_option( $site_id, 'blogname' );
-                               $aliases   = $service->get_aliases( $site_id );
-                               $primary   = '';
+                               $site_id = (int) $site->blog_id;
+                               $name    = get_blog_option( $site_id, 'blogname' );
+                               $aliases = $service->get_aliases( $site_id );
+                               $primary = '';
                                foreach ( $aliases as $alias ) {
                                        if ( ! empty( $alias['is_primary'] ) ) {
                                                $primary = $alias['domain'];
                                                break;
                                        }
                                }
+                               if ( ! $primary ) {
+                                       $primary = (string) get_site_meta( $site_id, 'porkpress_domain', true );
+                               }
+                               $site_url   = get_site_url( $site_id );
+                               $site_host  = $site_url ? wp_parse_url( $site_url, PHP_URL_HOST ) : '';
+                               if ( ! $primary && $site_host ) {
+                                       $primary = $site_host;
+                               }
                                $manage_url = network_admin_url( 'admin.php?page=porkpress-site-aliases&id=' . $site_id );
                                echo '<tr>';
                                echo '<td>' . esc_html( $site_id ) . '</td>';
                                echo '<td>' . esc_html( $name ) . '</td>';
-                               echo '<td>' . ( $primary ? esc_html( $primary ) : '&mdash;' ) . '</td>';
+                               echo '<td>';
+                               if ( $primary ) {
+                                       echo esc_html( $primary );
+                                       if ( $site_url ) {
+                                               echo '<br /><a href="' . esc_url( $site_url ) . '">' . esc_html( $site_url ) . '</a>';
+                                       }
+                               } else {
+                                       echo '&mdash;';
+                               }
+                               echo '</td>';
                                echo '<td><a href="' . esc_url( $manage_url ) . '">' . esc_html__( 'Manage Domains', 'porkpress-ssl' ) . '</a></td>';
                                echo '</tr>';
                        }
@@ -303,12 +329,50 @@ class Admin {
 
                echo '</tbody></table>';
 
+               $domain_list = $service->list_domains();
+               $available   = array();
+               if ( ! ( $domain_list instanceof Porkbun_Client_Error ) && ! empty( $domain_list['domains'] ) ) {
+                       $mapped = wp_list_pluck( $service->get_aliases(), 'domain' );
+                       foreach ( $domain_list['domains'] as $info ) {
+                               $root = $info['domain'] ?? $info['name'] ?? '';
+                               if ( $root && ! in_array( $root, $mapped, true ) ) {
+                                       $available[] = $root;
+                               }
+                       }
+               }
+
                echo '<h2>' . esc_html__( 'Add New Site', 'porkpress-ssl' ) . '</h2>';
                echo '<form method="post">';
                wp_nonce_field( 'porkpress_create_site', 'porkpress_create_site_nonce' );
                echo '<table class="form-table" role="presentation">';
-               echo '<tr><th scope="row"><label for="new-site-domain">' . esc_html__( 'Domain', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_domain" type="text" id="new-site-domain" class="regular-text" required /></td></tr>';
-               echo '<tr><th scope="row"><label for="new-site-title">' . esc_html__( 'Title', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_title" type="text" id="new-site-title" class="regular-text" required /></td></tr>';
+               echo '<tr><th scope="row"><label for="new-site-subdomain">' . esc_html__( 'Site Address (URL)', 'porkpress-ssl' ) . '</label></th><td>';
+               echo '<input name="new_site_subdomain" type="text" id="new-site-subdomain" class="regular-text" pattern="[a-z0-9-]+" />';
+               if ( $available ) {
+                       echo '<span>.</span><select name="new_site_domain" id="new-site-domain">';
+                       foreach ( $available as $domain ) {
+                               echo '<option value="' . esc_attr( $domain ) . '">' . esc_html( $domain ) . '</option>';
+                       }
+                       echo '</select>';
+               } else {
+                       echo '<input name="new_site_domain" type="text" id="new-site-domain" class="regular-text" required />';
+               }
+               echo '<p class="description">' . esc_html__( 'Only lowercase letters (a-z), numbers, and hyphens are allowed.', 'porkpress-ssl' ) . '</p>';
+               echo '</td></tr>';
+               echo '<tr><th scope="row"><label for="new-site-title">' . esc_html__( 'Site Title', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_title" type="text" id="new-site-title" class="regular-text" required /></td></tr>';
+               echo '<tr><th scope="row"><label for="new-site-lang">' . esc_html__( 'Site Language', 'porkpress-ssl' ) . '</label></th><td>';
+               if ( function_exists( 'wp_dropdown_languages' ) ) {
+                       wp_dropdown_languages(
+                               array(
+                                       'name'                         => 'new_site_lang',
+                                       'id'                           => 'new-site-lang',
+                                       'selected'                     => 'en_US',
+                                       'show_available_translations'  => false,
+                               )
+                       );
+               } else {
+                       echo '<input name="new_site_lang" type="text" id="new-site-lang" class="regular-text" value="en_US" />';
+               }
+               echo '</td></tr>';
                echo '<tr><th scope="row"><label for="new-site-email">' . esc_html__( 'Admin Email', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_email" type="email" id="new-site-email" class="regular-text" required /></td></tr>';
                echo '<tr><th scope="row"><label for="new-site-template">' . esc_html__( 'Template', 'porkpress-ssl' ) . '</label></th><td><input name="new_site_template" type="text" id="new-site-template" class="regular-text" /></td></tr>';
                echo '</table>';
