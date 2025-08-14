@@ -558,6 +558,12 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
         * @return int|\WP_Error Site ID on success or WP_Error on failure.
         */
        public function create_site( string $domain, string $title, string $admin_email, string $template = '' ) {
+               $domain = sanitize_text_field( $domain );
+               $domain = $this->validate_fqdn( $domain );
+               if ( false === $domain ) {
+                       return new \WP_Error( 'invalid_domain', __( 'Invalid domain name.', 'porkpress-ssl' ) );
+               }
+
                \PorkPress\SSL\Logger::info(
                        'create_site_start',
                        array(
