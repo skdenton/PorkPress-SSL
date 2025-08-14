@@ -429,6 +429,11 @@ class Admin {
                        return;
                }
 
+               if ( isset( $_GET['domain'] ) ) {
+                       $this->render_domain_details( sanitize_text_field( wp_unslash( $_GET['domain'] ) ) );
+                       return;
+               }
+
                if ( isset( $_GET['export'] ) ) {
                        $export  = sanitize_key( wp_unslash( $_GET['export'] ) );
                        if ( in_array( $export, array( 'mapping-csv', 'mapping-json' ), true ) ) {
@@ -463,7 +468,7 @@ class Admin {
                $status       = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
                $expiry_window = isset( $_GET['expiry'] ) ? absint( wp_unslash( $_GET['expiry'] ) ) : 0;
 
-              $service = new Domain_Service();
+             $service = new Domain_Service();
 
                if ( isset( $_POST['porkpress_ssl_refresh_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_refresh_nonce'] ), 'porkpress_ssl_refresh' ) ) {
                        $refresh = $service->refresh_domains();
@@ -498,48 +503,51 @@ class Admin {
                        $simulate_steps .= '</div>';
                }
 
-               echo '<form method="post" style="margin-bottom:1em;">';
-               wp_nonce_field( 'porkpress_ssl_simulate', 'porkpress_ssl_simulate_nonce' );
-               submit_button( __( 'Simulate', 'porkpress-ssl' ), 'secondary', 'simulate_now', false );
-               echo '</form>';
+               $has_creds = $service->has_credentials();
 
-               if ( $simulate_steps ) {
-                       echo $simulate_steps; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-               }
-
-               if ( ! $service->has_credentials() ) {
-                       printf(
-                               '<div class="error"><p>%s</p></div>',
-                               esc_html__( 'Porkbun API credentials are missing. Please configure them in the Settings tab.', 'porkpress-ssl' )
-                       );
-                       return;
-               }
-
-               if ( isset( $_POST['porkpress_ssl_reconcile_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_reconcile_nonce'] ), 'porkpress_ssl_reconcile' ) ) {
+               if ( $has_creds && isset( $_POST['porkpress_ssl_reconcile_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_reconcile_nonce'] ), 'porkpress_ssl_reconcile' ) ) {
                        $reconciler = new Reconciler( $service );
                        $reconciler->reconcile_all();
                        echo '<div class="updated"><p>' . esc_html__( 'Reconciliation complete.', 'porkpress-ssl' ) . '</p></div>';
                }
 
-               echo '<form method="post" style="margin-bottom:1em;">';
-               wp_nonce_field( 'porkpress_ssl_reconcile', 'porkpress_ssl_reconcile_nonce' );
-               submit_button( __( 'Reconcile Now', 'porkpress-ssl' ), 'secondary', 'reconcile_now', false );
-               echo '</form>';
-
-               if ( isset( $_POST['porkpress_ssl_issue_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_issue_nonce'] ), 'porkpress_ssl_issue' ) ) {
+               if ( $has_creds && isset( $_POST['porkpress_ssl_issue_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_issue_nonce'] ), 'porkpress_ssl_issue' ) ) {
                        SSL_Service::run_queue();
                        echo '<div class="updated"><p>' . esc_html__( 'Issuance tasks processed.', 'porkpress-ssl' ) . '</p></div>';
                }
 
-               echo '<form method="post" style="margin-bottom:1em;">';
-               wp_nonce_field( 'porkpress_ssl_issue', 'porkpress_ssl_issue_nonce' );
-               submit_button( __( 'Run now', 'porkpress-ssl' ), 'secondary', 'issue_now', false );
+               echo '<div class="porkpress-domain-buttons" style="display:flex;gap:1em;flex-wrap:wrap;">';
+               echo '<form method="post" style="margin:0;">';
+               wp_nonce_field( 'porkpress_ssl_simulate', 'porkpress_ssl_simulate_nonce' );
+               submit_button( __( 'Simulate', 'porkpress-ssl' ), 'secondary', 'simulate_now', false );
                echo '</form>';
 
-               echo '<form method="post" style="margin-bottom:1em;">';
-               wp_nonce_field( 'porkpress_ssl_refresh', 'porkpress_ssl_refresh_nonce' );
-               submit_button( __( 'Refresh Domains', 'porkpress-ssl' ), 'secondary', 'refresh_domains', false );
-               echo '</form>';
+               if ( $has_creds ) {
+                       echo '<form method="post" style="margin:0;">';
+                       wp_nonce_field( 'porkpress_ssl_reconcile', 'porkpress_ssl_reconcile_nonce' );
+                       submit_button( __( 'Reconcile Now', 'porkpress-ssl' ), 'secondary', 'reconcile_now', false );
+                       echo '</form>';
+
+                       echo '<form method="post" style="margin:0;">';
+                       wp_nonce_field( 'porkpress_ssl_issue', 'porkpress_ssl_issue_nonce' );
+                       submit_button( __( 'Run Now', 'porkpress-ssl' ), 'secondary', 'issue_now', false );
+                       echo '</form>';
+
+                       echo '<form method="post" style="margin:0;">';
+                       wp_nonce_field( 'porkpress_ssl_refresh', 'porkpress_ssl_refresh_nonce' );
+                       submit_button( __( 'Refresh Domains', 'porkpress-ssl' ), 'secondary', 'refresh_domains', false );
+                       echo '</form>';
+               }
+               echo '</div>';
+
+               if ( $simulate_steps ) {
+                       echo $simulate_steps; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+               }
+
+               if ( ! $has_creds ) {
+                       printf( '<div class="error"><p>%s</p></div>', esc_html__( 'Porkbun API credentials are missing. Please configure them in the Settings tab.', 'porkpress-ssl' ) );
+                       return;
+               }
 
                $last_refresh = $service->get_last_refresh();
                if ( $last_refresh ) {
@@ -657,7 +665,8 @@ class Admin {
                                echo '<tr>';
                                echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
                                $toggle = empty( $records ) ? '' : '<button type="button" class="porkpress-dns-toggle dashicons dashicons-arrow-right" aria-expanded="false"></button> ';
-                               echo '<td>' . $toggle . esc_html( $name ) . '</td>';
+                               $link   = esc_url( add_query_arg( array( 'domain' => $name ) ) );
+                               echo '<td>' . $toggle . '<a href="' . $link . '">' . esc_html( $name ) . '</a></td>';
                                $site_cell = '&mdash;';
                                $key       = strtolower( $name );
                                if ( isset( $alias_map[ $key ] ) ) {
@@ -721,6 +730,66 @@ class Admin {
                echo '<div id="porkpress-domain-progress" class="alignleft actions"></div>';
                echo '</div>';
                echo '</form>';
+       }
+
+       /**
+        * Render detailed information for a single domain.
+        *
+        * @param string $domain Domain name.
+        */
+       private function render_domain_details( string $domain ) {
+               $service = new Domain_Service();
+               $data    = array();
+               $result  = $service->list_domains();
+               if ( ! ( $result instanceof Porkbun_Client_Error ) ) {
+                       foreach ( $result['domains'] ?? array() as $info ) {
+                               $name = $info['domain'] ?? $info['name'] ?? '';
+                               if ( 0 === strcasecmp( $name, $domain ) ) {
+                                       $data = $info;
+                                       break;
+                               }
+                       }
+               }
+
+               echo '<h2>' . esc_html( $domain ) . '</h2>';
+               if ( empty( $data ) ) {
+                       echo '<p>' . esc_html__( 'Domain details not found in cache.', 'porkpress-ssl' ) . '</p>';
+                       echo '<p><a href="' . esc_url( remove_query_arg( 'domain' ) ) . '">&larr; ' . esc_html__( 'Back to Domains', 'porkpress-ssl' ) . '</a></p>';
+                       return;
+               }
+
+               $status = $data['status'] ?? $data['dnsstatus'] ?? '';
+               $expiry = $data['expiry'] ?? $data['expiration'] ?? $data['exdate'] ?? '';
+               echo '<table class="widefat"><tbody>';
+               if ( $status ) {
+                       echo '<tr><th>' . esc_html__( 'Status', 'porkpress-ssl' ) . '</th><td>' . esc_html( $status ) . '</td></tr>';
+               }
+               if ( $expiry ) {
+                       echo '<tr><th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th><td>' . esc_html( $expiry ) . '</td></tr>';
+               }
+               echo '</tbody></table>';
+
+               if ( ! empty( $data['nameservers'] ) && is_array( $data['nameservers'] ) ) {
+                       echo '<h3>' . esc_html__( 'Nameservers', 'porkpress-ssl' ) . '</h3><ul>';
+                       foreach ( $data['nameservers'] as $ns ) {
+                               echo '<li>' . esc_html( $ns ) . '</li>';
+                       }
+                       echo '</ul>';
+               }
+
+               if ( ! empty( $data['dns'] ) && is_array( $data['dns'] ) ) {
+                       echo '<h3>' . esc_html__( 'DNS Records', 'porkpress-ssl' ) . '</h3>';
+                       echo '<table class="widefat"><thead><tr><th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Content', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
+                       foreach ( $data['dns'] as $rec ) {
+                               $type    = $rec['type'] ?? '';
+                               $rname   = $rec['name'] ?? '';
+                               $content = $rec['content'] ?? '';
+                               echo '<tr><td>' . esc_html( $type ) . '</td><td>' . esc_html( $rname ) . '</td><td>' . esc_html( $content ) . '</td></tr>';
+                       }
+                       echo '</tbody></table>';
+               }
+
+               echo '<p><a href="' . esc_url( remove_query_arg( 'domain' ) ) . '">&larr; ' . esc_html__( 'Back to Domains', 'porkpress-ssl' ) . '</a></p>';
        }
 
        /**
