@@ -76,13 +76,14 @@ class Runner {
      * Check if sudo can run a given binary non-interactively.
      */
     protected static function sudo_available( string $bin ): bool {
-        if ( isset( self::$sudo_ok[ $bin ] ) ) {
-            return self::$sudo_ok[ $bin ];
+        $escaped = escapeshellarg( $bin );
+        if ( isset( self::$sudo_ok[ $escaped ] ) ) {
+            return self::$sudo_ok[ $escaped ];
         }
-        $test   = 'sudo -n ' . escapeshellcmd( $bin ) . ' --version';
+        $test   = 'sudo -n ' . $escaped . ' --version';
         $result = self::raw_run( $test );
-        self::$sudo_ok[ $bin ] = ( 0 === $result['code'] );
-        return self::$sudo_ok[ $bin ];
+        self::$sudo_ok[ $escaped ] = ( 0 === $result['code'] );
+        return self::$sudo_ok[ $escaped ];
     }
 
     /**
