@@ -436,7 +436,7 @@ class DomainServiceTest extends TestCase {
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public array $args = array();
             public function __construct() {}
-            public function create_a_record( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
                 $this->args = func_get_args();
                 return array( 'status' => 'SUCCESS' );
             }
@@ -461,7 +461,7 @@ class DomainServiceTest extends TestCase {
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            public function create_a_record( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
                 return new \PorkPress\SSL\Porkbun_Client_Error( 'err', 'fail' );
             }
         };
@@ -492,7 +492,7 @@ class DomainServiceTest extends TestCase {
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
-            public function create_a_record( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) { return array( 'status' => 'SUCCESS' ); }
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) { return array( 'status' => 'SUCCESS' ); }
         };
 
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
@@ -541,7 +541,7 @@ class DomainServiceTest extends TestCase {
                 $this->deleted[] = $record_id;
                 return array( 'status' => 'SUCCESS' );
             }
-            public function create_a_record( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
                 return array( 'status' => 'SUCCESS' );
             }
         };
@@ -610,7 +610,7 @@ class DomainServiceTest extends TestCase {
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public array $calls = [];
             public function __construct() {}
-            public function create_a_record( string $domain, string $name, string $content, int $ttl = 300, string $type = 'A' ) {
+            public function create_a_record( string $domain, string $name, string $content, int $ttl = 600, string $type = 'A' ) {
                 $this->calls[] = [ $domain, $name, $content, $ttl, $type ];
                 return array( 'status' => 'SUCCESS' );
             }
