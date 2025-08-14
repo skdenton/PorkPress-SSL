@@ -929,8 +929,184 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
        }
 
        /**
-        * Detect the network's IP address.
+        * Add a DNS record.
         *
+        * @param string $domain  Domain zone.
+        * @param string $type    Record type.
+        * @param string $name    Record name.
+        * @param string $content Record content.
+        * @param int    $ttl     Time to live.
+        *
+        * @return bool|Porkbun_Client_Error True on success or error on failure.
+        */
+       public function add_dns_record( string $domain, string $type, string $name, string $content, int $ttl ) {
+               $domain  = $this->validate_fqdn( $domain );
+               $type    = strtoupper( sanitize_text_field( $type ) );
+               $name    = sanitize_text_field( $name );
+               $content = sanitize_text_field( $content );
+               $ttl     = (int) $ttl;
+
+               if ( false === $domain ) {
+                       return new \WP_Error( 'invalid_domain', __( 'Invalid domain name.', 'porkpress-ssl' ) );
+               }
+
+               $allowed_types = array( 'A', 'AAAA', 'CNAME', 'TXT', 'MX', 'SRV', 'NS', 'PTR', 'CAA', 'ALIAS' );
+               if ( ! in_array( $type, $allowed_types, true ) ) {
+                       return new \WP_Error( 'invalid_type', __( 'Invalid DNS record type.', 'porkpress-ssl' ) );
+               }
+
+               if ( $ttl < 60 || $ttl > 86400 ) {
+                       return new \WP_Error( 'invalid_ttl', __( 'Invalid TTL value.', 'porkpress-ssl' ) );
+               }
+
+               try {
+                       $result = $this->client->create_record( $domain, $type, $name, $content, $ttl );
+               } catch ( \Throwable $e ) {
+                       $result = new Porkbun_Client_Error( 'client_error', $e->getMessage() );
+               }
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       \PorkPress\SSL\Logger::error(
+                               'add_dns_record',
+                               array(
+                                       'domain' => $domain,
+                                       'type'   => $type,
+                                       'name'   => $name,
+                                       'ttl'    => $ttl,
+                               ),
+                               $result->message
+                       );
+                       return $result;
+               }
+
+               $this->clear_domain_cache();
+               $fqdn = $name ? "{$name}.{$domain}" : $domain;
+               $this->touch_aliases_for_domain( $fqdn );
+               return true;
+       }
+
+       /**
+        * Update a DNS record.
+        *
+        * @param string $domain    Domain zone.
+        * @param int    $record_id Record ID.
+        * @param string $type      Record type.
+        * @param string $name      Record name.
+        * @param string $content   Record content.
+        * @param int    $ttl       Time to live.
+        *
+        * @return bool|Porkbun_Client_Error True on success or error on failure.
+        */
+       public function update_dns_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl ) {
+               $domain    = $this->validate_fqdn( $domain );
+               $type      = strtoupper( sanitize_text_field( $type ) );
+               $name      = sanitize_text_field( $name );
+               $content   = sanitize_text_field( $content );
+               $record_id = (int) $record_id;
+               $ttl       = (int) $ttl;
+
+               if ( false === $domain ) {
+                       return new \WP_Error( 'invalid_domain', __( 'Invalid domain name.', 'porkpress-ssl' ) );
+               }
+
+               $allowed_types = array( 'A', 'AAAA', 'CNAME', 'TXT', 'MX', 'SRV', 'NS', 'PTR', 'CAA', 'ALIAS' );
+               if ( ! in_array( $type, $allowed_types, true ) ) {
+                       return new \WP_Error( 'invalid_type', __( 'Invalid DNS record type.', 'porkpress-ssl' ) );
+               }
+
+               if ( $ttl < 60 || $ttl > 86400 ) {
+                       return new \WP_Error( 'invalid_ttl', __( 'Invalid TTL value.', 'porkpress-ssl' ) );
+               }
+
+               try {
+                       $result = $this->client->edit_record( $domain, $record_id, $type, $name, $content, $ttl );
+               } catch ( \Throwable $e ) {
+                       $result = new Porkbun_Client_Error( 'client_error', $e->getMessage() );
+               }
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       \PorkPress\SSL\Logger::error(
+                               'update_dns_record',
+                               array(
+                                       'domain'    => $domain,
+                                       'record_id' => $record_id,
+                                       'type'      => $type,
+                                       'name'      => $name,
+                                       'ttl'       => $ttl,
+                               ),
+                               $result->message
+                       );
+                       return $result;
+               }
+
+               $this->clear_domain_cache();
+               $fqdn = $name ? "{$name}.{$domain}" : $domain;
+               $this->touch_aliases_for_domain( $fqdn );
+               return true;
+       }
+
+       /**
+        * Delete a DNS record.
+        *
+        * @param string $domain    Domain zone.
+        * @param int    $record_id Record ID.
+        *
+        * @return bool|Porkbun_Client_Error True on success or error on failure.
+        */
+       public function delete_dns_record( string $domain, int $record_id ) {
+               $domain    = $this->validate_fqdn( $domain );
+               $record_id = (int) $record_id;
+
+               if ( false === $domain ) {
+                       return new \WP_Error( 'invalid_domain', __( 'Invalid domain name.', 'porkpress-ssl' ) );
+               }
+
+               if ( $record_id <= 0 ) {
+                       return new \WP_Error( 'invalid_record_id', __( 'Invalid record ID.', 'porkpress-ssl' ) );
+               }
+
+               try {
+                       $result = $this->client->delete_record( $domain, $record_id );
+               } catch ( \Throwable $e ) {
+                       $result = new Porkbun_Client_Error( 'client_error', $e->getMessage() );
+               }
+
+               if ( $result instanceof Porkbun_Client_Error ) {
+                       \PorkPress\SSL\Logger::error(
+                               'delete_dns_record',
+                               array(
+                                       'domain'    => $domain,
+                                       'record_id' => $record_id,
+                               ),
+                               $result->message
+                       );
+                       return $result;
+               }
+
+               $this->clear_domain_cache();
+               $this->touch_aliases_for_domain( $domain );
+               return true;
+       }
+
+       /**
+        * Update alias rows that reference a domain.
+        *
+        * @param string $domain Domain to match.
+        */
+       protected function touch_aliases_for_domain( string $domain ): void {
+               $aliases = $this->get_aliases();
+               $match   = '.' . $domain;
+               foreach ( $aliases as $alias ) {
+                       $alias_domain = $alias['domain'];
+                       if ( $alias_domain === $domain || substr( $alias_domain, -strlen( $match ) ) === $match ) {
+                               $this->update_alias( (int) $alias['site_id'], $alias_domain, array( 'status' => 'active' ) );
+                       }
+               }
+       }
+
+/**
+ * Detect the network's IP address.
+ *
         * @return string IPv4 address or empty string if unresolved.
         */
        protected function get_network_ip(): string {
