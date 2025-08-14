@@ -910,11 +910,11 @@ class DomainServiceTest extends TestCase {
             public array $edited  = array();
             public array $deleted = array();
             public function __construct() {}
-            public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 600 ) {
+            public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 600, ?int $prio = null ) {
                 $this->created = func_get_args();
                 return array( 'status' => 'SUCCESS' );
             }
-            public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 600 ) {
+            public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 600, ?int $prio = null ) {
                 $this->edited = func_get_args();
                 return array( 'status' => 'SUCCESS' );
             }
