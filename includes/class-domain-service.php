@@ -507,15 +507,14 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
             $domain_info['dns'] = $records['records'] ?? array();
 
-            $detail = $this->client->get_domain( $root );
-            if ( $detail instanceof Porkbun_Client_Error ) {
+            $ns = $this->client->get_nameservers( $root );
+            if ( $ns instanceof Porkbun_Client_Error ) {
                 $domain_info['nameservers'] = array();
-                $domain_info['details']     = array();
             } else {
-                $info                        = $detail['domain'] ?? $detail;
-                $domain_info['details']      = $info;
-                $domain_info['nameservers']  = $info['ns'] ?? array();
+                $domain_info['nameservers'] = $ns['ns'] ?? array();
             }
+
+            $domain_info['details'] = $domain_info;
 
             $seen = array();
             foreach ( $domain_info['dns'] as $rec ) {
@@ -1269,8 +1268,8 @@ UNIQUE KEY domain (domain)
   /**
    * Determine whether a domain is active in Porkbun.
    *
-   * Uses the API's single-domain endpoint to avoid fetching the full domain
-   * list.
+   * Porkbun does not provide a single-domain lookup, so this method retrieves
+   * the domain list and filters for the requested name.
    *
    * @param string $domain Domain name.
    *
@@ -1278,19 +1277,18 @@ UNIQUE KEY domain (domain)
    *              false if the API request fails.
    */
   public function is_domain_active( string $domain ): bool {
-       $result = $this->client->get_domain( $domain );
+       $result = $this->client->get_domain_details( $domain );
 
        if ( $result instanceof Porkbun_Client_Error ) {
-               Logger::error( 'get_domain', array( 'domain' => $domain ), $result->message );
+               Logger::error( 'get_domain_details', array( 'domain' => $domain ), $result->message );
                return false;
        }
 
-       if ( ! is_array( $result ) ) {
+       if ( ! is_array( $result ) || empty( $result ) ) {
                return false;
        }
 
-       $info = $result['domain'] ?? $result;
-       $status = strtoupper( $info['status'] ?? '' );
+       $status = strtoupper( $result['status'] ?? '' );
 
        if ( '' === $status ) {
                return false;
