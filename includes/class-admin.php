@@ -910,7 +910,7 @@ echo '<tr>';
                 global $wpdb;
                 $table_name = $wpdb->prefix . 'porkpress_logs';
 
-                if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table_name}'" ) !== $table_name ) {
+               if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
                         printf( '<div class="error"><p>%s</p></div>', esc_html__( 'Logs table does not exist.', 'porkpress-ssl' ) );
                         return;
                 }
