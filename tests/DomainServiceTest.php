@@ -265,6 +265,34 @@ class DomainServiceTest extends TestCase {
         $this->assertSame( 'example.com', $mock->last_domain );
     }
 
+    public function testIsDomainActiveLogsAndReturnsFalseOnError() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $mock = new class extends \PorkPress\SSL\Porkbun_Client {
+            public function __construct() {}
+            public function get_domain( string $domain ) {
+                return new \PorkPress\SSL\Porkbun_Client_Error( 'fail', 'error' );
+            }
+        };
+
+        $service = new class( $mock ) extends \PorkPress\SSL\Domain_Service {
+            public function __construct( $client ) {
+                $this->client = $client;
+                $this->missing_credentials = false;
+            }
+        };
+
+        $this->assertFalse( $service->is_domain_active( 'example.com' ) );
+        $table = \PorkPress\SSL\Logger::get_table_name();
+        $this->assertNotEmpty( $wpdb->data[ $table ] );
+        $log = $wpdb->data[ $table ][0];
+        $this->assertSame( 'get_domain', $log['action'] );
+        $this->assertSame( 'error', $log['result'] );
+        $ctx = json_decode( $log['context'], true );
+        $this->assertSame( 'example.com', $ctx['domain'] );
+    }
+
     public function testAliasCrud() {
         global $wpdb;
         $wpdb = new MockWpdb();
