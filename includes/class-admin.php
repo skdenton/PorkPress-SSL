@@ -1466,18 +1466,35 @@ echo '<tr>';
                        network_admin_url( 'admin.php' )
                );
 
+               $domain_list = $service->list_domains();
+               $available   = array();
+               if ( ! ( $domain_list instanceof Porkbun_Client_Error ) && ! empty( $domain_list['domains'] ) ) {
+                       $mapped = wp_list_pluck( $service->get_aliases(), 'domain' );
+                       foreach ( $domain_list['domains'] as $info ) {
+                               $root = $info['domain'] ?? $info['name'] ?? '';
+                               if ( $root && ! in_array( $root, $mapped, true ) ) {
+                                       $available[] = $root;
+                               }
+                       }
+               }
+
                if ( isset( $_POST['porkpress_add_alias'] ) ) {
                        check_admin_referer( 'porkpress_add_alias' );
                        $domain = sanitize_text_field( wp_unslash( $_POST['alias_domain'] ) );
-                       if ( $domain && empty( $service->get_aliases( null, $domain ) ) ) {
+                       if ( $domain && in_array( $domain, $available, true ) ) {
                                $is_primary = empty( $service->get_aliases( $site_id ) );
                                $service->add_alias( $site_id, $domain, $is_primary );
                                wp_safe_redirect( add_query_arg( 'pp_msg', 'added', $redirect ) );
                                exit;
-                       } else {
+                       }
+
+                       if ( $domain && ! empty( $service->get_aliases( null, $domain ) ) ) {
                                wp_safe_redirect( add_query_arg( 'pp_msg', 'exists', $redirect ) );
                                exit;
                        }
+
+                       wp_safe_redirect( add_query_arg( 'pp_msg', 'invalid', $redirect ) );
+                       exit;
                }
 
                if ( isset( $_GET['make_primary'] ) ) {
@@ -1600,6 +1617,9 @@ echo '<tr>';
                                case 'confirm':
                                        $text = __( 'Action cancelled. Type CONFIRM to proceed.', 'porkpress-ssl' );
                                        break;
+                               case 'invalid':
+                                       $text = __( 'Invalid domain selected.', 'porkpress-ssl' );
+                                       break;
                        }
                        if ( $text ) {
                                printf( '<div class="notice notice-info"><p>%s</p></div>', esc_html( $text ) );
@@ -1638,8 +1658,14 @@ echo '<tr>';
                echo '<h2>' . esc_html__( 'Add Alias', 'porkpress-ssl' ) . '</h2>';
                echo '<form method="post">';
                wp_nonce_field( 'porkpress_add_alias' );
-               echo '<input type="text" name="alias_domain" class="regular-text" /> ';
+               echo '<input type="text" name="alias_domain" class="regular-text" list="porkpress-domain-list" /> ';
+               echo '<datalist id="porkpress-domain-list">';
+               foreach ( $available as $domain ) {
+                       echo '<option value="' . esc_attr( $domain ) . '"></option>';
+               }
+               echo '</datalist>';
                submit_button( __( 'Add', 'porkpress-ssl' ), 'secondary', 'porkpress_add_alias', false );
+               echo '<p class="description">' . esc_html__( 'Only domains not currently mapped are listed.', 'porkpress-ssl' ) . '</p>';
                echo '</form>';
                echo '</div>';
        }
