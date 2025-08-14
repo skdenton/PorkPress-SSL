@@ -901,6 +901,64 @@ class DomainServiceTest extends TestCase {
         update_site_option( \PorkPress\SSL\Notifier::OPTION, array() );
     }
 
+    public function testDnsRecordMethods() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $client = new class extends \PorkPress\SSL\Porkbun_Client {
+            public array $created = array();
+            public array $edited  = array();
+            public array $deleted = array();
+            public function __construct() {}
+            public function create_record( string $domain, string $type, string $name, string $content, int $ttl = 600 ) {
+                $this->created = func_get_args();
+                return array( 'status' => 'SUCCESS' );
+            }
+            public function edit_record( string $domain, int $record_id, string $type, string $name, string $content, int $ttl = 600 ) {
+                $this->edited = func_get_args();
+                return array( 'status' => 'SUCCESS' );
+            }
+            public function delete_record( string $domain, int $record_id ) {
+                $this->deleted = func_get_args();
+                return array( 'status' => 'SUCCESS' );
+            }
+        };
+
+        $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
+            public int $cache_clear_count = 0;
+            public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
+            protected function clear_domain_cache(): void { $this->cache_clear_count++; }
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
+        };
+
+        $service->add_alias( 1, 'sub.example.com', false, 'inactive' );
+        $service->cache_clear_count = 0;
+
+        $this->assertTrue( $service->add_dns_record( 'example.com', 'a', 'sub', '1.2.3.4', 600 ) );
+        $alias = $service->get_aliases( null, 'sub.example.com' )[0];
+        $this->assertSame( 'active', $alias['status'] );
+        $this->assertSame( array( 'example.com', 'A', 'sub', '1.2.3.4', 600 ), $client->created );
+        $this->assertSame( 1, $service->cache_clear_count );
+
+        $service->update_alias( 1, 'sub.example.com', array( 'status' => 'inactive' ) );
+        $this->assertTrue( $service->update_dns_record( 'example.com', 5, 'a', 'sub', '1.2.3.4', 600 ) );
+        $alias = $service->get_aliases( null, 'sub.example.com' )[0];
+        $this->assertSame( 'active', $alias['status'] );
+        $this->assertSame( array( 'example.com', 5, 'A', 'sub', '1.2.3.4', 600 ), $client->edited );
+        $this->assertSame( 2, $service->cache_clear_count );
+
+        $service->update_alias( 1, 'sub.example.com', array( 'status' => 'inactive' ) );
+        $this->assertTrue( $service->delete_dns_record( 'example.com', 5 ) );
+        $alias = $service->get_aliases( null, 'sub.example.com' )[0];
+        $this->assertSame( 'active', $alias['status'] );
+        $this->assertSame( array( 'example.com', 5 ), $client->deleted );
+        $this->assertSame( 3, $service->cache_clear_count );
+
+        $this->assertInstanceOf( \WP_Error::class, $service->add_dns_record( 'example.com', 'BAD', 'sub', '1.2.3.4', 600 ) );
+        $this->assertInstanceOf( \WP_Error::class, $service->add_dns_record( 'example.com', 'A', 'sub', '1.2.3.4', 10 ) );
+    }
+
     protected function tearDown(): void {
         unset( $GLOBALS['porkpress_skip_dns_check'] );
         $GLOBALS['dns_records'] = array();
