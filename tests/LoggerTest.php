@@ -42,6 +42,14 @@ class LoggerTest extends TestCase {
         $this->assertArrayNotHasKey( 'password', $data );
     }
 
+    public function test_sanitize_context_removes_emails() {
+        $ctx = json_encode( array( 'email' => 'foo@example.com', 'foo' => 'bar' ) );
+        $sanitized = \PorkPress\SSL\Logger::sanitize_context( $ctx );
+        $data = json_decode( $sanitized, true );
+        $this->assertSame( 'bar', $data['foo'] );
+        $this->assertArrayNotHasKey( 'email', $data );
+    }
+
     public function test_log_redacts_secrets() {
         global $wpdb;
         $wpdb = new LoggerMockWpdb();
@@ -55,5 +63,19 @@ class LoggerTest extends TestCase {
         $this->assertSame( 'bar', $ctx['foo'] );
         $this->assertArrayNotHasKey( 'api_key', $ctx );
         $this->assertArrayNotHasKey( 'password', $ctx );
+    }
+
+    public function test_log_redacts_emails() {
+        global $wpdb;
+        $wpdb = new LoggerMockWpdb();
+
+        \PorkPress\SSL\Logger::log( 'action', array( 'email' => 'foo@example.com', 'foo' => 'bar' ) );
+
+        $table = \PorkPress\SSL\Logger::get_table_name();
+        $row   = $wpdb->data[ $table ][0];
+        $ctx   = json_decode( $row['context'], true );
+
+        $this->assertSame( 'bar', $ctx['foo'] );
+        $this->assertArrayNotHasKey( 'email', $ctx );
     }
 }

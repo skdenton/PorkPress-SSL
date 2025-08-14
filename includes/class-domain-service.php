@@ -567,10 +567,10 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                \PorkPress\SSL\Logger::info(
                        'create_site_start',
                        array(
-                               'domain'      => $domain,
-                               'title'       => $title,
-                               'admin_email' => $admin_email,
-                               'template'    => $template,
+                               'domain'           => $domain,
+                               'title'            => $title,
+                               'admin_email_hash' => hash( 'sha256', strtolower( trim( $admin_email ) ) ),
+                               'template'         => $template,
                        )
                );
 
