@@ -25,11 +25,12 @@ class Admin {
         public function init() {
                 add_action( 'network_admin_menu', array( $this, 'register_network_menu' ) );
                 add_action( 'network_admin_menu', array( $this, 'register_site_alias_page' ) );
-                add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
+               add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
                add_action( 'wp_ajax_porkpress_ssl_bulk_action', array( $this, 'handle_bulk_action' ) );
                add_action( 'wp_ajax_porkpress_dns_add', array( $this, 'handle_dns_add' ) );
                add_action( 'wp_ajax_porkpress_dns_edit', array( $this, 'handle_dns_edit' ) );
                add_action( 'wp_ajax_porkpress_dns_delete', array( $this, 'handle_dns_delete' ) );
+               add_action( 'wp_ajax_porkpress_dns_retrieve', array( $this, 'handle_dns_retrieve' ) );
                add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                add_action( 'network_admin_notices', array( $this, 'sunrise_notice' ) );
                add_filter( 'network_edit_site_nav_links', array( $this, 'add_site_nav_link' ) );
@@ -780,6 +781,7 @@ class Admin {
                                'update'       => __( 'Update', 'porkpress-ssl' ),
                                'delete'       => __( 'Delete', 'porkpress-ssl' ),
                                'confirmDelete'=> __( 'Delete this record?', 'porkpress-ssl' ),
+                               'error'        => __( 'Request failed. Please try again.', 'porkpress-ssl' ),
                        ),
                ) );
 
@@ -839,6 +841,28 @@ class Admin {
                        }
                }
                return is_array( $data ) ? $data : array();
+       }
+
+       /**
+        * AJAX handler to retrieve DNS records for a domain.
+        */
+       public function handle_dns_retrieve() {
+               check_ajax_referer( 'porkpress_dns_action', 'nonce' );
+
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       wp_send_json_error( 'no_permission' );
+               }
+
+               $domain  = isset( $_POST['domain'] ) ? sanitize_text_field( wp_unslash( $_POST['domain'] ) ) : '';
+               $service = new Domain_Service();
+               $result  = $service->get_dns_records( $domain );
+
+               if ( $result instanceof Porkbun_Client_Error || is_wp_error( $result ) ) {
+                       $message = $result instanceof Porkbun_Client_Error ? $result->message : $result->get_error_message();
+                       wp_send_json_error( $message );
+               }
+
+               wp_send_json_success( array( 'records' => $result ) );
        }
 
        /**
