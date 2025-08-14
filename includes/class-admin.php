@@ -1148,6 +1148,13 @@ update_site_option( 'porkpress_ssl_state_root', sanitize_text_field( wp_unslash(
 $network_wildcard = isset( $_POST['porkpress_network_wildcard'] ) ? 1 : 0;
 update_site_option( 'porkpress_ssl_network_wildcard', $network_wildcard );
 
+if ( isset( $_POST['porkpress_ipv4'] ) ) {
+    update_site_option( 'porkpress_ssl_ipv4_override', sanitize_text_field( wp_unslash( $_POST['porkpress_ipv4'] ) ) );
+}
+if ( isset( $_POST['porkpress_ipv6'] ) ) {
+    update_site_option( 'porkpress_ssl_ipv6_override', sanitize_text_field( wp_unslash( $_POST['porkpress_ipv6'] ) ) );
+}
+
             if ( isset( $_POST['porkpress_prod_server'] ) ) {
                 update_site_option( 'porkpress_ssl_prod_server_ip', sanitize_text_field( wp_unslash( $_POST['porkpress_prod_server'] ) ) );
             }
