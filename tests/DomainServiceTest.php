@@ -381,6 +381,28 @@ class DomainServiceTest extends TestCase {
         $this->assertCount( 0, $service->get_aliases( 1 ) );
     }
 
+    public function testAliasHelpersClearCache() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public int $clears = 0;
+            public function __construct() {}
+            protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
+            protected function delete_a_record( string $domain, int $site_id ) { return true; }
+            protected function queue_wildcard_aware_issuance( int $site_id, string $domain ): void {}
+            protected function clear_domain_cache(): void { $this->clears++; }
+        };
+
+        $this->assertTrue( $service->add_alias( 1, 'example.com', true, 'active' ) );
+        $this->assertSame( 1, $service->clears );
+        $this->assertCount( 1, $service->get_aliases( 1 ) );
+
+        $this->assertTrue( $service->delete_alias( 1, 'example.com' ) );
+        $this->assertSame( 2, $service->clears );
+        $this->assertCount( 0, $service->get_aliases( 1 ) );
+    }
+
     public function testCreateRecordAddsWwwCnameForApex() {
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}
