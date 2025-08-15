@@ -1379,17 +1379,23 @@ echo '<tr>';
 
                echo '<h2>' . esc_html__( 'Certificates', 'porkpress-ssl' ) . '</h2>';
                echo '<table class="widefat fixed striped">';
-               echo '<thead><tr><th>' . esc_html__( 'Certificate Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Domains', 'porkpress-ssl' ) . '</th></tr></thead>';
+               echo '<thead><tr><th>' . esc_html__( 'Certificate Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Domains', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Expiration', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Status', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th></tr></thead>';
                echo '<tbody>';
 
                if ( empty( $certs ) ) {
-                       echo '<tr><td colspan="2">' . esc_html__( 'No certificates found.', 'porkpress-ssl' ) . '</td></tr>';
+                       echo '<tr><td colspan="5">' . esc_html__( 'No certificates found.', 'porkpress-ssl' ) . '</td></tr>';
                } else {
                        foreach ( $certs as $name => $info ) {
                                $domains = $info['domains'] ?? array();
+                               $expiry  = $info['expiry'] ?? '';
+                               $status  = $info['status'] ?? '';
+                               $formatted = $expiry ? date_i18n( get_option( 'date_format' ), strtotime( $expiry ) ) : '';
                                echo '<tr>';
                                echo '<td>' . esc_html( $name ) . '</td>';
                                echo '<td>' . esc_html( implode( ', ', $domains ) ) . '</td>';
+                               echo '<td>' . esc_html( $formatted ) . '</td>';
+                               echo '<td>' . esc_html( $status ) . '</td>';
+                               echo '<td></td>';
                                echo '</tr>';
                        }
                }

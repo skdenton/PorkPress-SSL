@@ -78,7 +78,7 @@ class Certbot_Helper {
      * array keyed by lineage name. Each entry contains a `domains` array of
      * SANs present in that certificate.
      *
-     * @return array<string, array{domains: array<int, string>}>
+     * @return array<string, array{domains: array<int, string>, expiry: string, status: string}>
      */
     public static function list_certificates(): array {
         $result = Runner::run( 'certbot certificates 2>/dev/null', 'certbot' );
@@ -93,7 +93,7 @@ class Certbot_Helper {
      * Parse `certbot certificates` output.
      *
      * @param string $output Raw output from certbot.
-     * @return array<string, array{domains: array<int, string>}>
+     * @return array<string, array{domains: array<int, string>, expiry: string, status: string}>
      */
     public static function parse_certificates_output( string $output ): array {
         $certs   = array();
@@ -102,12 +102,36 @@ class Certbot_Helper {
             $line = trim( $line );
             if ( preg_match( '/^Certificate Name:\s*(\S+)/', $line, $m ) ) {
                 $current             = $m[1];
-                $certs[ $current ] = array( 'domains' => array() );
+                $certs[ $current ] = array(
+                    'domains' => array(),
+                    'expiry'  => '',
+                    'status'  => '',
+                );
                 continue;
             }
             if ( $current && preg_match( '/^Domains:\s*(.+)$/', $line, $m ) ) {
                 $domains                       = preg_split( '/\s+/', trim( $m[1] ) );
                 $certs[ $current ]['domains'] = is_array( $domains ) ? $domains : array();
+                continue;
+            }
+            if ( $current && preg_match( '/^Expiry Date:\s*(.+)$/', $line, $m ) ) {
+                // Strip anything after "(VALID" which certbot appends.
+                $expiry = trim( preg_split( '/\s+\(VALID/i', $m[1] )[0] );
+                $certs[ $current ]['expiry'] = $expiry;
+
+                $ts   = strtotime( $expiry );
+                $now  = time();
+                $days = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
+                if ( false !== $ts ) {
+                    if ( $ts < $now ) {
+                        $status = 'Expired';
+                    } elseif ( $ts <= $now + 30 * $days ) {
+                        $status = 'Expiring Soon';
+                    } else {
+                        $status = 'Valid';
+                    }
+                    $certs[ $current ]['status'] = $status;
+                }
             }
         }
 
