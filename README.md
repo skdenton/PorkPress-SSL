@@ -171,5 +171,5 @@ When assigning domains to sites via the Domain Aliases screen, the domain picker
 
 On Debian 11 with Apache, WordPress is typically installed under `/var/www/html`
 and Let's Encrypt stores certificates in `/etc/letsencrypt`. An existing SAN
-certificate for `adynton.com` may already reside in this directory; PorkPress
+certificate may already reside in this directory; PorkPress
 SSL can renew and expand it as additional domains are added.

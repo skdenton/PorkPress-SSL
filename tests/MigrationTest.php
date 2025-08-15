@@ -80,8 +80,8 @@ class MigrationTest extends TestCase {
         $state_root = sys_get_temp_dir() . '/porkpress-migrate-state';
         update_site_option( 'porkpress_ssl_cert_root', $cert_root );
         update_site_option( 'porkpress_ssl_state_root', $state_root );
-        update_site_option( 'porkpress_ssl_cert_name', 'adynton.com' );
-        $live_dir = $cert_root . '/live/adynton.com';
+        update_site_option( 'porkpress_ssl_cert_name', 'testdomain.com' );
+        $live_dir = $cert_root . '/live/testdomain.com';
         if ( ! is_dir( $live_dir ) ) { mkdir( $live_dir, 0777, true ); }
         $cert_path = $live_dir . '/cert.pem';
         $key_path  = $live_dir . '/privkey.pem';
@@ -93,7 +93,7 @@ class MigrationTest extends TestCase {
         \PorkPress\SSL\Renewal_Service::maybe_schedule();
         $this->assertFileExists( $state_root . '/manifest.json' );
         $manifest = json_decode( file_get_contents( $state_root . '/manifest.json' ), true );
-        $this->assertEquals( 'adynton.com', $manifest['cert_name'] );
+        $this->assertEquals( 'testdomain.com', $manifest['cert_name'] );
         $this->assertContains( 'example.com', $manifest['domains'] );
     }
 }
