@@ -571,6 +571,9 @@ class Admin {
                        echo '<p>' . sprintf( esc_html__( 'Last refresh: %s', 'porkpress-ssl' ), esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last_refresh ) ) ) . '</p>';
                }
 
+               $prod_server_ip = get_site_option( 'porkpress_ssl_prod_server_ip', '' );
+               $dev_server_ip  = get_site_option( 'porkpress_ssl_dev_server_ip', '' );
+
                $aliases   = $service->get_aliases();
                $alias_map = array();
                foreach ( $aliases as $alias ) {
@@ -678,12 +681,13 @@ class Admin {
                echo '<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all" /></td>';
                echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Site', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Server', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
                echo '</tr></thead><tbody>';
 
                 if ( empty( $domains ) ) {
-               echo '<tr><td colspan="5">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+               echo '<tr><td colspan="6">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
                 } else {
                        foreach ( $domains as $domain ) {
                                $name       = $domain['domain'] ?? $domain['name'] ?? '';
@@ -720,12 +724,28 @@ class Admin {
                                       }
                               }
                                echo '<td>' . $site_cell . '</td>';
+
+                               $server = 'N/A';
+                               foreach ( $records as $record ) {
+                                   if ( 'A' === $record['type'] ) {
+                                       if ( ! empty( $prod_server_ip ) && $record['content'] === $prod_server_ip ) {
+                                           $server = 'Prod';
+                                           break;
+                                       }
+                                       if ( ! empty( $dev_server_ip ) && $record['content'] === $dev_server_ip ) {
+                                           $server = 'Dev';
+                                           break;
+                                       }
+                                   }
+                               }
+                               echo '<td>' . esc_html( $server ) . '</td>';
+
                                echo '<td>' . esc_html( $expiry ) . '</td>';
                                echo '<td>' . esc_html( $dns_status ) . '</td>';
                                echo '</tr>';
 
                                if ( ! empty( $records ) ) {
-                                       echo '<tr class="porkpress-dns-details" style="display:none;"><td colspan="5">';
+                                       echo '<tr class="porkpress-dns-details" style="display:none;"><td colspan="6">';
                                        echo '<table class="widefat">';
                                        echo '<thead><tr><th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Content', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
                                        foreach ( $records as $rec ) {
@@ -1235,8 +1255,8 @@ $txt_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_txt_timeout', 60
 $txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) ) );
 $ipv4_override = get_site_option( 'porkpress_ssl_ipv4_override', '' );
 $ipv6_override = get_site_option( 'porkpress_ssl_ipv6_override', '' );
-$prod_server   = get_site_option( 'porkpress_ssl_prod_server_ip', '' );
-$dev_server    = get_site_option( 'porkpress_ssl_dev_server_ip', '' );
+               $prod_server_ip = get_site_option( 'porkpress_ssl_prod_server_ip', '' );
+               $dev_server_ip  = get_site_option( 'porkpress_ssl_dev_server_ip', '' );
 $cert_name = $cert_name_locked ? PORKPRESS_CERT_NAME : get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = $cert_root_locked ? PORKPRESS_CERT_ROOT : get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
 $state_root = $state_root_locked ? PORKPRESS_STATE_ROOT : get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
