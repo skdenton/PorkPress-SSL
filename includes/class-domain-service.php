@@ -531,7 +531,18 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                 if ( '' === $name || '@' === $name ) {
                     continue;
                 }
-                $fqdn = $name . '.' . $root;
+
+                $fqdn = $name;
+                $suffix = '.' . $root;
+
+                if ( $name !== $root ) {
+                    $name_len = strlen( $name );
+                    $suffix_len = strlen( $suffix );
+                    if ( $name_len < $suffix_len || substr( $name, -$suffix_len ) !== $suffix ) {
+                        $fqdn = $name . '.' . $root;
+                    }
+                }
+
                 $key  = strtolower( $fqdn );
                 if ( isset( $seen[ $key ] ) ) {
                     continue;
