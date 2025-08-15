@@ -1376,14 +1376,17 @@ update_site_option( 'porkpress_ssl_state_root', sanitize_text_field( wp_unslash(
 $network_wildcard = isset( $_POST['porkpress_network_wildcard'] ) ? 1 : 0;
 update_site_option( 'porkpress_ssl_network_wildcard', $network_wildcard );
 
-$ipv4_override = get_site_option( 'porkpress_ssl_ipv4_override', '' );
+$ipv4_override = isset( $_POST['porkpress_ipv4'] )
+    ? sanitize_text_field( wp_unslash( $_POST['porkpress_ipv4'] ) )
+    : get_site_option( 'porkpress_ssl_ipv4_override', '' );
 if ( isset( $_POST['porkpress_ipv4'] ) ) {
-    $ipv4_override = sanitize_text_field( wp_unslash( $_POST['porkpress_ipv4'] ) );
     update_site_option( 'porkpress_ssl_ipv4_override', $ipv4_override );
 }
-$ipv6_override = get_site_option( 'porkpress_ssl_ipv6_override', '' );
+
+$ipv6_override = isset( $_POST['porkpress_ipv6'] )
+    ? sanitize_text_field( wp_unslash( $_POST['porkpress_ipv6'] ) )
+    : get_site_option( 'porkpress_ssl_ipv6_override', '' );
 if ( isset( $_POST['porkpress_ipv6'] ) ) {
-    $ipv6_override = sanitize_text_field( wp_unslash( $_POST['porkpress_ipv6'] ) );
     update_site_option( 'porkpress_ssl_ipv6_override', $ipv6_override );
 }
 
