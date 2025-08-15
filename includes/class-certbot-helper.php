@@ -81,12 +81,75 @@ class Certbot_Helper {
      * @return array<string, array{domains: array<int, string>, expiry: string, status: string}>
      */
     public static function list_certificates(): array {
-        $result = Runner::run( 'certbot certificates 2>/dev/null', 'certbot' );
-        if ( 0 !== $result['code'] || '' === trim( $result['output'] ) ) {
+        $cmd    = 'certbot certificates';
+        $result = Runner::run( $cmd . ' 2>/dev/null', 'certbot' );
+        $user   = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+
+        if ( 0 !== $result['code'] ) {
+            Logger::error(
+                'certbot_list',
+                array(
+                    'cmd'    => $cmd,
+                    'output' => $result['output'],
+                    'user_id' => $user,
+                ),
+                'failed'
+            );
+            Notifier::notify(
+                'error',
+                function_exists( '__' ) ? __( 'Certbot list failed', 'porkpress-ssl' ) : 'Certbot list failed',
+                function_exists( '__' ) ? __( 'Unable to list certificates.', 'porkpress-ssl' ) : 'Unable to list certificates.'
+            );
             return array();
         }
 
-        return self::parse_certificates_output( $result['output'] );
+        $output = trim( $result['output'] );
+        if ( '' === $output ) {
+            Logger::warn(
+                'certbot_list',
+                array(
+                    'cmd'     => $cmd,
+                    'user_id' => $user,
+                ),
+                'empty_output'
+            );
+            Notifier::notify(
+                'warning',
+                function_exists( '__' ) ? __( 'No certificates returned', 'porkpress-ssl' ) : 'No certificates returned',
+                function_exists( '__' ) ? __( 'Certbot produced no output.', 'porkpress-ssl' ) : 'Certbot produced no output.'
+            );
+            return array();
+        }
+
+        try {
+            $certs = self::parse_certificates_output( $output );
+            Logger::info(
+                'certbot_list',
+                array(
+                    'cmd'     => $cmd,
+                    'count'   => count( $certs ),
+                    'user_id' => $user,
+                ),
+                'success'
+            );
+            return $certs;
+        } catch ( \Throwable $e ) {
+            Logger::warn(
+                'certbot_list',
+                array(
+                    'cmd'     => $cmd,
+                    'output'  => $output,
+                    'user_id' => $user,
+                ),
+                'parse_failed'
+            );
+            Notifier::notify(
+                'warning',
+                function_exists( '__' ) ? __( 'Certificate parsing failed', 'porkpress-ssl' ) : 'Certificate parsing failed',
+                function_exists( '__' ) ? __( 'Could not parse certificate list.', 'porkpress-ssl' ) : 'Could not parse certificate list.'
+            );
+            return array();
+        }
     }
 
     /**

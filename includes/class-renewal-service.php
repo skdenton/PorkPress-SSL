@@ -95,27 +95,59 @@ defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network'
 );
 $staging   = (bool) get_site_option( 'porkpress_ssl_le_staging', 0 );
 
-$cmd    = self::build_certbot_command( $manifest['domains'], $cert_name, $staging, true );
-$result = self::execute( $cmd, 'certbot' );
+        $user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+        $cmd    = self::build_certbot_command( $manifest['domains'], $cert_name, $staging, true );
+        $result = self::execute( $cmd, 'certbot' );
         if ( 0 !== $result['code'] ) {
-        Logger::error( 'renew_certificate', array( 'attempt' => $attempt, 'output' => $result['output'] ), 'certbot failed' );
-        update_site_option( self::OPTION_ATTEMPTS, $attempt );
-        \PorkPress\SSL\Notifier::notify( 'error', __( 'SSL renewal failed', 'porkpress-ssl' ), __( 'Certbot failed during renewal.', 'porkpress-ssl' ) );
-        if ( $attempt <= self::MAX_RETRIES ) {
-        $delay = self::calculate_backoff( $attempt );
-        wp_schedule_single_event( time() + $delay, self::CRON_HOOK );
-        }
-        return;
+            Logger::error(
+                'renew_certificate',
+                array(
+                    'cmd'     => $cmd,
+                    'cert'    => $cert_name,
+                    'domains' => $manifest['domains'],
+                    'attempt' => $attempt,
+                    'output'  => $result['output'],
+                    'user_id' => $user_id,
+                ),
+                'certbot failed'
+            );
+            update_site_option( self::OPTION_ATTEMPTS, $attempt );
+            \PorkPress\SSL\Notifier::notify( 'error', __( 'SSL renewal failed', 'porkpress-ssl' ), __( 'Certbot failed during renewal.', 'porkpress-ssl' ) );
+            if ( $attempt <= self::MAX_RETRIES ) {
+                $delay = self::calculate_backoff( $attempt );
+                wp_schedule_single_event( time() + $delay, self::CRON_HOOK );
+            }
+            return;
         }
 
         $manifest_ok = self::write_manifest( $manifest['domains'], $cert_name );
         $deploy_ok   = self::deploy_to_apache( $cert_name );
         if ( ! $manifest_ok || ! $deploy_ok ) {
-            Logger::error( 'renew_certificate', array( 'attempt' => $attempt ), 'post-deploy failed' );
+            Logger::error(
+                'renew_certificate',
+                array(
+                    'cmd'     => $cmd,
+                    'cert'    => $cert_name,
+                    'domains' => $manifest['domains'],
+                    'attempt' => $attempt,
+                    'user_id' => $user_id,
+                ),
+                'post-deploy failed'
+            );
             return;
         }
 
-        Logger::info( 'renew_certificate', array( 'attempt' => $attempt ), 'success' );
+        Logger::info(
+            'renew_certificate',
+            array(
+                'cmd'     => $cmd,
+                'cert'    => $cert_name,
+                'domains' => $manifest['domains'],
+                'attempt' => $attempt,
+                'user_id' => $user_id,
+            ),
+            'success'
+        );
         update_site_option( self::OPTION_ATTEMPTS, 0 );
         update_site_option( self::OPTION_EXPIRY_NOTIFIED, $manifest['expires_at'] ?? '' );
         \PorkPress\SSL\Notifier::notify( 'success', __( 'SSL certificate renewed', 'porkpress-ssl' ), __( 'Certificate renewal completed successfully.', 'porkpress-ssl' ) );
