@@ -800,7 +800,7 @@ class Admin {
                wp_enqueue_script(
                        'porkpress-domain-dns-details',
                        set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-details.js', 'https' ),
-                       array( 'jquery' ),
+                       array( 'jquery', 'wp-i18n' ),
                        PORKPRESS_SSL_VERSION,
                        true
                );
@@ -809,13 +809,6 @@ class Admin {
                        'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                        'nonce'   => wp_create_nonce( 'porkpress_dns_action' ),
                        'domain'  => $domain,
-                       'i18n'    => array(
-                               'add'          => __( 'Add', 'porkpress-ssl' ),
-                               'update'       => __( 'Update', 'porkpress-ssl' ),
-                               'delete'       => __( 'Delete', 'porkpress-ssl' ),
-                               'confirmDelete'=> __( 'Delete this record?', 'porkpress-ssl' ),
-                               'error'        => __( 'Request failed. Please try again.', 'porkpress-ssl' ),
-                       ),
                ) );
 
                $status = $data['status'] ?? $data['dnsstatus'] ?? '';
@@ -1695,13 +1688,12 @@ echo '<tr>';
                                $shard = isset( $domain_map[ $alias['domain'] ] ) ? $domain_map[ $alias['domain'] ] : esc_html__( 'internal', 'porkpress-ssl' );
                                echo '<td>' . esc_html( $shard ) . '</td>';
                                echo '<td>' . ( $alias['is_primary'] ? '&#10003;' : '' ) . '</td>';
-                               echo '<td>';
+                               echo '<td class="porkpress-alias-actions">';
                                if ( ! $alias['is_primary'] ) {
                                        $primary_url = wp_nonce_url( add_query_arg( 'make_primary', rawurlencode( $alias['domain'] ), $redirect ), 'porkpress_make_primary_' . $alias['domain'] );
                                        $delete_url  = wp_nonce_url( add_query_arg( 'delete_alias', rawurlencode( $alias['domain'] ), $redirect ), 'porkpress_delete_alias_' . $alias['domain'] );
-                                       $prompt = esc_js( __( 'Type CONFIRM to proceed:', 'porkpress-ssl' ) );
-                                       echo '<a href="#" onclick="var c=prompt(\'' . $prompt . '\'); if(c===\'CONFIRM\'){window.location.href=\'' . esc_url( add_query_arg( 'confirm', 'CONFIRM', $primary_url ) ) . '\';} return false;">' . esc_html__( 'Set Primary', 'porkpress-ssl' ) . '</a> | ';
-                                       echo '<a href="#" onclick="var c=prompt(\'' . $prompt . '\'); if(c===\'CONFIRM\'){window.location.href=\'' . esc_url( add_query_arg( 'confirm', 'CONFIRM', $delete_url ) ) . '\';} return false;">' . esc_html__( 'Remove', 'porkpress-ssl' ) . '</a>';
+                                       echo '<a href="' . esc_url( $primary_url ) . '" data-action="set-primary">' . esc_html__( 'Set Primary', 'porkpress-ssl' ) . '</a> | ';
+                                       echo '<a href="' . esc_url( $delete_url ) . '" data-action="remove">' . esc_html__( 'Remove', 'porkpress-ssl' ) . '</a>';
                                } else {
                                        echo '&#8212;';
                                }
@@ -1724,6 +1716,16 @@ echo '<tr>';
                submit_button( __( 'Add', 'porkpress-ssl' ), 'secondary', 'porkpress_add_alias', false );
                echo '<p class="description">' . esc_html__( 'Only domains not currently mapped are listed.', 'porkpress-ssl' ) . '</p>';
                echo '</form>';
+
+               wp_enqueue_script(
+                       'porkpress-site-aliases',
+                       set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/site-aliases.js', 'https' ),
+                       array( 'jquery', 'wp-i18n' ),
+                       PORKPRESS_SSL_VERSION,
+                       true
+               );
+               wp_set_script_translations( 'porkpress-site-aliases', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+
                echo '</div>';
        }
 

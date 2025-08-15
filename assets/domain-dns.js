@@ -8,16 +8,6 @@ jQuery( function ( $ ) {
     }
 
     /**
-     * Escape potentially unsafe characters for string concatenation.
-     *
-     * @param {string} str String to escape.
-     * @return {string} Escaped string.
-     */
-    function escapeHtml( str ) {
-        return $( '<div>' ).text( str ).html();
-    }
-
-    /**
      * Sanitize field values prior to DOM insertion.
      *
      * @param {string|number} value Value to sanitize.
@@ -91,7 +81,6 @@ jQuery( function ( $ ) {
         var msg = err && err.message ? err.message :
             err && err.responseJSON && err.responseJSON.data ? err.responseJSON.data :
             __( 'Request failed', 'porkpress-ssl' );
-        alert( msg );
         speak( msg );
     }
 
