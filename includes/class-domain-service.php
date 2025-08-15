@@ -334,10 +334,10 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
     /**
      * Clear the domain list cache.
      */
-    protected function clear_domain_cache(): void {
+    public function clear_domain_cache(): void {
         $this->domain_list_cache = null;
-        if ( function_exists( 'delete_site_transient' ) ) {
-            delete_site_transient( self::DOMAIN_LIST_CACHE_KEY );
+        if ( function_exists( 'delete_site_option' ) ) {
+            delete_site_option( self::DOMAIN_CACHE_OPTION );
         }
     }
 

@@ -474,7 +474,15 @@ class Admin {
 
              $service = new Domain_Service();
 
-               if ( isset( $_POST['porkpress_ssl_refresh_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_refresh_nonce'] ), 'porkpress_ssl_refresh' ) ) {
+               if ( isset( $_POST['porkpress_ssl_clear_refresh_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_clear_refresh_nonce'] ), 'porkpress_ssl_clear_refresh' ) ) {
+                       $service->clear_domain_cache();
+                       $refresh = $service->refresh_domains();
+                       if ( $refresh instanceof Porkbun_Client_Error ) {
+                               echo '<div class="error"><p>' . esc_html( $refresh->message ) . '</p></div>';
+                       } else {
+                               echo '<div class="updated"><p>' . esc_html__( 'Domain cache cleared and list refreshed.', 'porkpress-ssl' ) . '</p></div>';
+                       }
+               } elseif ( isset( $_POST['porkpress_ssl_refresh_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['porkpress_ssl_refresh_nonce'] ), 'porkpress_ssl_refresh' ) ) {
                        $refresh = $service->refresh_domains();
                        if ( $refresh instanceof Porkbun_Client_Error ) {
                                echo '<div class="error"><p>' . esc_html( $refresh->message ) . '</p></div>';
@@ -540,6 +548,11 @@ class Admin {
                        echo '<form method="post" style="margin:0;">';
                        wp_nonce_field( 'porkpress_ssl_refresh', 'porkpress_ssl_refresh_nonce' );
                        submit_button( __( 'Refresh Domains', 'porkpress-ssl' ), 'secondary', 'refresh_domains', false );
+                       echo '</form>';
+
+                       echo '<form method="post" style="margin:0;">';
+                       wp_nonce_field( 'porkpress_ssl_clear_refresh', 'porkpress_ssl_clear_refresh_nonce' );
+                       submit_button( __( 'Clear Cache and Refresh', 'porkpress-ssl' ), 'delete', 'clear_refresh', false );
                        echo '</form>';
                }
                echo '</div>';
