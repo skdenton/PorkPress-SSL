@@ -429,6 +429,7 @@ class Admin {
          * Render the domains tab for the network admin page.
          */
        public function render_domains_tab() {
+               echo "<h1>DEBUG: NEW VERSION IS RUNNING</h1>";
                if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
                        return;
                }
@@ -673,7 +674,53 @@ class Admin {
 		unset( $group );
 		ksort( $domains );
 
-		// TODO: Re-implement filtering logic to work with the new grouped structure.
+		if ( $search || $status || $expiry_window > 0 ) {
+			$passes_filter = function ( $domain_data ) use ( $search, $status, $expiry_window ) {
+				$name = $domain_data['domain'] ?? $domain_data['name'] ?? '';
+				if ( $search && false === stripos( $name, $search ) ) {
+					return false;
+				}
+				$dns_status = $domain_data['status'] ?? $domain_data['dnsstatus'] ?? '';
+				if ( $status && 0 !== strcasecmp( $dns_status, $status ) ) {
+					return false;
+				}
+				if ( $expiry_window > 0 ) {
+					$expiry = $domain_data['expiry'] ?? $domain_data['expiration'] ?? $domain_data['exdate'] ?? '';
+					if ( ! $expiry ) {
+						return false;
+					}
+					$time = strtotime( $expiry );
+					if ( ! $time || $time - time() > $expiry_window * DAY_IN_SECONDS ) {
+						return false;
+					}
+				}
+				return true;
+			};
+
+			$domains = array_filter(
+				$domains,
+				function ( $group ) use ( $passes_filter, $search ) {
+					if ( $passes_filter( $group['domain_data'] ) ) {
+						return true;
+					}
+					$matching_subdomains = array_filter( $group['subdomains'], $passes_filter );
+					if ( ! empty( $matching_subdomains ) ) {
+						if ( $search ) {
+							$group['subdomains'] = $matching_subdomains;
+						}
+						return true;
+					}
+					return false;
+				}
+			);
+
+			foreach ( $domains as &$group ) {
+				if ( ! empty( $search ) ) {
+					$group['expand_by_default'] = true;
+				}
+			}
+			unset( $group );
+		}
 
                 echo '<form method="get">';
                 echo '<input type="hidden" name="page" value="porkpress-ssl" />';

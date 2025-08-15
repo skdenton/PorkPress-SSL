@@ -1,8 +1,8 @@
 jQuery(function($){
     // Inject CSS for new UI elements
     var css = '<style type="text/css">' +
-        '.porkpress-dns-toggle { vertical-align: middle !important; }' +
-        '.porkpress-dns-toggle-placeholder, .porkpress-subdomain-indent { display: inline-block; width: 28px; }' +
+        '.toggle-subdomains .dashicons { vertical-align: middle !important; }' +
+        '.subdomain-indent { display: inline-block; width: 28px; }' +
     '</style>';
     $('head').append(css);
 
@@ -50,17 +50,20 @@ jQuery(function($){
         $('input[name="domains[]"]').prop('checked', this.checked);
     });
 
-    // New toggle logic
-    var $tableBody = $('#porkpress-domain-actions tbody');
-    $tableBody.on('click', '.porkpress-dns-toggle', function(e) {
+    // Subdomain toggle logic
+    $('#porkpress-domain-actions').on('click', '.toggle-subdomains', function(e) {
         e.preventDefault();
         var $button = $(this);
-        var group = $button.data('group');
-        var $container = $tableBody.find('tr[data-parent-group="' + group + '"]');
+        var parentDomain = $button.closest('tr').data('domain');
+        var $subdomainRows = $('tr.subdomain-row[data-parent="' + parentDomain + '"]');
 
-        $container.slideToggle(200);
+        $subdomainRows.slideToggle(200);
 
-        $button.toggleClass('dashicons-arrow-right dashicons-arrow-down');
+        // Toggle arrow icon
+        var $icon = $button.find('.dashicons');
+        $icon.toggleClass('dashicons-arrow-right-alt2 dashicons-arrow-down-alt2');
+
+        // Update aria-expanded attribute for accessibility
         var isExpanded = $button.attr('aria-expanded') === 'true';
         $button.attr('aria-expanded', !isExpanded);
     });
