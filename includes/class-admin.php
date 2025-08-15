@@ -1376,19 +1376,29 @@ update_site_option( 'porkpress_ssl_state_root', sanitize_text_field( wp_unslash(
 $network_wildcard = isset( $_POST['porkpress_network_wildcard'] ) ? 1 : 0;
 update_site_option( 'porkpress_ssl_network_wildcard', $network_wildcard );
 
+$ipv4_override = get_site_option( 'porkpress_ssl_ipv4_override', '' );
 if ( isset( $_POST['porkpress_ipv4'] ) ) {
-    update_site_option( 'porkpress_ssl_ipv4_override', sanitize_text_field( wp_unslash( $_POST['porkpress_ipv4'] ) ) );
+    $ipv4_override = sanitize_text_field( wp_unslash( $_POST['porkpress_ipv4'] ) );
+    update_site_option( 'porkpress_ssl_ipv4_override', $ipv4_override );
 }
+$ipv6_override = get_site_option( 'porkpress_ssl_ipv6_override', '' );
 if ( isset( $_POST['porkpress_ipv6'] ) ) {
-    update_site_option( 'porkpress_ssl_ipv6_override', sanitize_text_field( wp_unslash( $_POST['porkpress_ipv6'] ) ) );
+    $ipv6_override = sanitize_text_field( wp_unslash( $_POST['porkpress_ipv6'] ) );
+    update_site_option( 'porkpress_ssl_ipv6_override', $ipv6_override );
 }
 
-            if ( isset( $_POST['porkpress_prod_server'] ) ) {
-                update_site_option( 'porkpress_ssl_prod_server_ip', sanitize_text_field( wp_unslash( $_POST['porkpress_prod_server'] ) ) );
-            }
-            if ( isset( $_POST['porkpress_dev_server'] ) ) {
-                update_site_option( 'porkpress_ssl_dev_server_ip', sanitize_text_field( wp_unslash( $_POST['porkpress_dev_server'] ) ) );
-            }
+           if ( isset( $_POST['porkpress_prod_server'] ) ) {
+               $prod_server_ip = sanitize_text_field( wp_unslash( $_POST['porkpress_prod_server'] ) );
+               if ( filter_var( $prod_server_ip, FILTER_VALIDATE_IP ) ) {
+                       update_site_option( 'porkpress_ssl_prod_server_ip', $prod_server_ip );
+               }
+           }
+           if ( isset( $_POST['porkpress_dev_server'] ) ) {
+               $dev_server_ip = sanitize_text_field( wp_unslash( $_POST['porkpress_dev_server'] ) );
+               if ( filter_var( $dev_server_ip, FILTER_VALIDATE_IP ) ) {
+                       update_site_option( 'porkpress_ssl_dev_server_ip', $dev_server_ip );
+               }
+           }
 
 $cert_name = get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
@@ -1552,11 +1562,11 @@ echo '<td><input name="porkpress_ipv6" type="text" id="porkpress_ipv6" value="' 
 echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_prod_server">' . esc_html__( 'Production Server', 'porkpress-ssl' ) . '</label></th>';
-echo '<td><input name="porkpress_prod_server" type="text" id="porkpress_prod_server" value="' . esc_attr( $prod_server ) . '" class="regular-text" /></td>';
+echo '<td><input name="porkpress_prod_server" type="text" id="porkpress_prod_server" value="' . esc_attr( $prod_server_ip ) . '" class="regular-text" /></td>';
 echo '</tr>';
 echo '<tr>';
 echo '<th scope="row"><label for="porkpress_dev_server">' . esc_html__( 'Development Server', 'porkpress-ssl' ) . '</label></th>';
-echo '<td><input name="porkpress_dev_server" type="text" id="porkpress_dev_server" value="' . esc_attr( $dev_server ) . '" class="regular-text" /></td>';
+echo '<td><input name="porkpress_dev_server" type="text" id="porkpress_dev_server" value="' . esc_attr( $dev_server_ip ) . '" class="regular-text" /></td>';
 echo '</tr>';
 echo '<tr>';
         echo '<th scope="row">' . esc_html__( 'Automatic Reconciliation', 'porkpress-ssl' ) . '</th>';
