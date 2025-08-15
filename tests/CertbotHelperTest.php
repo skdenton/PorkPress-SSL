@@ -58,4 +58,48 @@ class CertbotHelperTest extends TestCase {
         $this->assertSame( [ 'soon.com' ], $parsed['soon.com']['domains'] );
         $this->assertSame( [ 'expired.com' ], $parsed['expired.com']['domains'] );
     }
+
+    /**
+     * Ensure list_certificates uses custom certbot path.
+     *
+     * @runInSeparateProcess
+     */
+    public function testListCertificatesUsesCustomPath() {
+        if ( ! defined( 'ABSPATH' ) ) {
+            define( 'ABSPATH', __DIR__ );
+        }
+
+        $script = tempnam( sys_get_temp_dir(), 'certbot' );
+        $content  = "#!/bin/sh\n";
+        $content .= "echo 'Found the following certs:'\n";
+        $content .= "echo '  Certificate Name: custom.com'\n";
+        $content .= "echo '    Domains: custom.com'\n";
+        $content .= "echo '    Expiry Date: 2030-01-01'\n";
+        file_put_contents( $script, $content );
+        chmod( $script, 0700 );
+
+        // Shim WordPress get_site_option.
+        $GLOBALS['pp_ssl_site_options'] = array( 'porkpress_ssl_certbot_cmd' => $script );
+        if ( ! function_exists( 'get_site_option' ) ) {
+            function get_site_option( $key, $default = false ) {
+                return $GLOBALS['pp_ssl_site_options'][ $key ] ?? $default;
+            }
+        }
+
+        if ( ! class_exists( '\\PorkPress\\SSL\\Logger' ) ) {
+            eval( 'namespace PorkPress\\SSL; class Logger { public static function error(...$args){} public static function warn(...$args){} public static function info(...$args){} }' );
+        }
+        if ( ! class_exists( '\\PorkPress\\SSL\\Notifier' ) ) {
+            eval( 'namespace PorkPress\\SSL; class Notifier { public static function notify(...$args){} }' );
+        }
+
+        require_once __DIR__ . '/../includes/class-certbot-helper.php';
+
+        $certs = \PorkPress\SSL\Certbot_Helper::list_certificates();
+
+        unlink( $script );
+
+        $this->assertArrayHasKey( 'custom.com', $certs );
+        $this->assertSame( array( 'custom.com' ), $certs['custom.com']['domains'] );
+    }
 }

@@ -81,9 +81,10 @@ class Certbot_Helper {
      * @return array<string, array{domains: array<int, string>, expiry: string, status: string}>
      */
     public static function list_certificates(): array {
-        $cmd    = 'certbot certificates';
-        $result = Runner::run( $cmd . ' 2>/dev/null', 'certbot' );
-        $user   = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+        $certbot_cmd = function_exists( '\\get_site_option' ) ? \get_site_option( 'porkpress_ssl_certbot_cmd', 'certbot' ) : 'certbot';
+        $cmd         = escapeshellcmd( $certbot_cmd ) . ' certificates';
+        $result      = Runner::run( $cmd . ' 2>/dev/null', 'certbot' );
+        $user        = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
 
         if ( 0 !== $result['code'] ) {
             Logger::error(
