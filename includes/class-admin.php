@@ -667,14 +667,6 @@ class Admin {
                        'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                        'nonce'   => wp_create_nonce( 'porkpress_ssl_bulk_action' ),
                ) );
-               wp_enqueue_script(
-                       'porkpress-domain-dns',
-                       set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-dns.js', 'https' ),
-                       array( 'jquery' ),
-                       PORKPRESS_SSL_VERSION,
-                       true
-               );
-
                echo '<form id="porkpress-domain-actions" method="post">';
                echo '<table class="widefat fixed striped">';
                echo '<thead><tr>';
@@ -694,16 +686,23 @@ class Admin {
                                $expiry     = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
                                $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
                                $records    = $domain['dns'] ?? array();
+                               $subdomains = $domain['subdomains'] ?? array();
 
                                echo '<tr>';
                                echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
-                               $toggle = empty( $records ) ? '' : '<button type="button" class="porkpress-dns-toggle dashicons dashicons-arrow-right" aria-expanded="false"></button> ';
                                $link   = esc_url( add_query_arg( array( 'domain' => $name ) ) );
-                               echo '<td>' . $toggle . '<a href="' . $link . '">' . esc_html( $name ) . '</a></td>';
+                               echo '<td><a href="' . $link . '">' . esc_html( $name ) . '</a></td>';
                               $site_cell = '&mdash;';
-                              $alias     = $service->get_aliases( null, $name );
-                              if ( ! empty( $alias ) ) {
-                                      $site_id = (int) $alias[0]['site_id'];
+                              $alias_domains = array_merge( array( $name ), wp_list_pluck( $subdomains, 'domain' ) );
+                              $aliases = array();
+                              foreach( $alias_domains as $alias_domain ) {
+                                  $alias = $service->get_aliases( null, $alias_domain );
+                                  if ( ! empty( $alias ) ) {
+                                      $aliases = array_merge( $aliases, $alias );
+                                  }
+                              }
+                              if ( ! empty( $aliases ) ) {
+                                      $site_id = (int) $aliases[0]['site_id'];
                                       $site    = get_site( $site_id );
                                       if ( $site ) {
                                               $site_name = get_blog_option( $site_id, 'blogname' );
@@ -726,7 +725,8 @@ class Admin {
                                echo '<td>' . $site_cell . '</td>';
 
                                $server = 'N/A';
-                               foreach ( $records as $record ) {
+                               $all_records = array_merge( $records, ...array_map( fn($s) => $s['dns'] ?? [], $subdomains ) );
+                               foreach ( $all_records as $record ) {
                                    if ( 'A' === $record['type'] ) {
                                        if ( ! empty( $prod_server_ip ) && $record['content'] === $prod_server_ip ) {
                                            $server = 'Prod';
@@ -743,20 +743,6 @@ class Admin {
                                echo '<td>' . esc_html( $expiry ) . '</td>';
                                echo '<td>' . esc_html( $dns_status ) . '</td>';
                                echo '</tr>';
-
-                               if ( ! empty( $records ) ) {
-                                       echo '<tr class="porkpress-dns-details" style="display:none;"><td colspan="6">';
-                                       echo '<table class="widefat">';
-                                       echo '<thead><tr><th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Content', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
-                                       foreach ( $records as $rec ) {
-                                               $type    = $rec['type'] ?? '';
-                                               $rname   = $rec['name'] ?? '';
-                                               $content = $rec['content'] ?? '';
-                                               echo '<tr><td>' . esc_html( $type ) . '</td><td>' . esc_html( $rname ) . '</td><td>' . esc_html( $content ) . '</td></tr>';
-                                       }
-                                       echo '</tbody></table>';
-                                       echo '</td></tr>';
-                               }
                        }
                }
 

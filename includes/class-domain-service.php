@@ -498,11 +498,11 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
             $current_page++;
         } while ( ! empty( $domains ) );
 
-        $extra = array();
         foreach ( $all_domains as &$domain_info ) {
             $root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
             if ( ! $root ) {
                 $domain_info['dns'] = array();
+                $domain_info['subdomains'] = array();
                 continue;
             }
 
@@ -511,10 +511,12 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                 $domain_info['dns']         = array();
                 $domain_info['nameservers'] = array();
                 $domain_info['details']     = array();
+                $domain_info['subdomains'] = array();
                 continue;
             }
 
             $domain_info['dns'] = $records['records'] ?? array();
+            $domain_info['subdomains'] = array();
 
             $ns = $this->client->get_nameservers( $root );
             if ( $ns instanceof Porkbun_Client_Error ) {
@@ -530,8 +532,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                 $type = $rec['type'] ?? '';
                 $name = $rec['name'] ?? '';
 
-                // Only consider A records for domain entries.
-                if ( 'A' !== $type ) {
+                if ( 'CNAME' === $type && strpos( $name, '*' ) !== false ) {
                     continue;
                 }
 
@@ -555,7 +556,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                     continue;
                 }
                 $seen[ $key ] = true;
-                $extra[]      = array(
+                $domain_info['subdomains'][] = array(
                     'domain'      => $fqdn,
                     'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
                     'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
@@ -569,8 +570,7 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
         $final = array(
             'status'       => $status,
-            'root_domains' => $all_domains,
-            'domains'      => array_merge( $all_domains, $extra ),
+            'domains'      => $all_domains,
         );
 
         $this->domain_list_cache = $final;
