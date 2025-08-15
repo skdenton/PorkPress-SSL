@@ -133,6 +133,7 @@ class SSL_Service {
 
                $shards = self::shard_domains( $all_domains );
                $all_ok = true;
+               $user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
                foreach ( $shards as $index => $names ) {
                        $cert_name = 'porkpress-shard-' . $index;
                        $cmd       = Renewal_Service::build_certbot_command( $names, $cert_name, $staging, false );
@@ -149,9 +150,12 @@ class SSL_Service {
                                Logger::error(
                                        'issue_certificate',
                                        array(
-                                               'site_ids' => $queue,
-                                               'domains'  => $names,
-                                               'output'   => $result['output'],
+                                               'cmd'     => $cmd,
+                                               'cert'    => $cert_name,
+                                               'site_ids'=> $queue,
+                                               'domains' => $names,
+                                               'output'  => $result['output'],
+                                               'user_id' => $user_id,
                                        ),
                                        'certbot failed'
                                );
@@ -165,8 +169,11 @@ class SSL_Service {
                                Logger::error(
                                        'issue_certificate',
                                        array(
-                                               'site_ids' => $queue,
-                                               'domains'  => $names,
+                                               'cmd'     => $cmd,
+                                               'cert'    => $cert_name,
+                                               'site_ids'=> $queue,
+                                               'domains' => $names,
+                                               'user_id' => $user_id,
                                        ),
                                        'post-deploy failed'
                                );
@@ -176,8 +183,11 @@ class SSL_Service {
                        Logger::info(
                                'issue_certificate',
                                array(
-                                       'site_ids' => $queue,
-                                       'domains'  => $names,
+                                       'cmd'     => $cmd,
+                                       'cert'    => $cert_name,
+                                       'site_ids'=> $queue,
+                                       'domains' => $names,
+                                       'user_id' => $user_id,
                                ),
                                'success'
                        );

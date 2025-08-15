@@ -244,21 +244,68 @@ protected function run_certbot( array $domains, string $cert_name, bool $staging
                         $domains = array_values( array_unique( array_merge( $existing[ $cert_name ]['domains'], $domains ) ) );
                 }
 
-                $cmd = Certbot_Helper::build_command( $domains, $cert_name, $staging, $renewal );
+                $cmd     = Certbot_Helper::build_command( $domains, $cert_name, $staging, $renewal );
+                $user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
 
                 $result = WP_CLI::launch( $cmd, false, true );
                 if ( 0 !== $result->return_code ) {
+                        Logger::error(
+                                'issue_certificate',
+                                array(
+                                        'cmd'     => $cmd,
+                                        'cert'    => $cert_name,
+                                        'domains' => $domains,
+                                        'output'  => $result->stderr,
+                                        'user_id' => $user_id,
+                                ),
+                                'certbot failed'
+                        );
+                        Notifier::notify( 'error', __( 'SSL issuance failed', 'porkpress-ssl' ), __( 'Certbot failed during issuance.', 'porkpress-ssl' ) );
                         WP_CLI::error( 'certbot failed: ' . $result->stderr );
                 }
 
                 if ( ! Renewal_Service::write_manifest( $domains, $cert_name ) ) {
+                        Logger::error(
+                                'issue_certificate',
+                                array(
+                                        'cmd'     => $cmd,
+                                        'cert'    => $cert_name,
+                                        'domains' => $domains,
+                                        'user_id' => $user_id,
+                                ),
+                                'manifest failed'
+                        );
                         WP_CLI::error( 'Failed to write manifest.' );
                 }
 
                 if ( ! Renewal_Service::deploy_to_apache( $cert_name ) ) {
                         $err = Renewal_Service::$last_reload['output'] ?? '';
+                        Logger::error(
+                                'issue_certificate',
+                                array(
+                                        'cmd'     => $cmd,
+                                        'cert'    => $cert_name,
+                                        'domains' => $domains,
+                                        'output'  => $err,
+                                        'user_id' => $user_id,
+                                ),
+                                'deploy failed'
+                        );
+                        Notifier::notify( 'error', __( 'SSL deploy failed', 'porkpress-ssl' ), $err );
                         WP_CLI::error( 'Deployment failed: ' . $err );
                 }
+
+                Logger::info(
+                        'issue_certificate',
+                        array(
+                                'cmd'     => $cmd,
+                                'cert'    => $cert_name,
+                                'domains' => $domains,
+                                'user_id' => $user_id,
+                        ),
+                        'success'
+                );
+                Notifier::notify( 'success', __( 'SSL certificate issued', 'porkpress-ssl' ), __( 'Certificate stored.', 'porkpress-ssl' ) );
 
                 WP_CLI::success( 'Certificate stored.' );
         }
