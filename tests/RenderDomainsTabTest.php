@@ -20,13 +20,24 @@ namespace PorkPress\SSL;
 class Domain_Service {
     public static $aliases = [];
     public static $domains = [];
+    public static $servers = [];
     public function has_credentials() { return true; }
     public function get_aliases( ?int $site_id = null, ?string $domain = null ): array {
         if ( null !== $domain ) {
             $domain = strtolower( $domain );
-            return isset( self::$aliases[ $domain ] ) ? array( self::$aliases[ $domain ] ) : array();
+            if ( isset( self::$aliases[ $domain ] ) ) {
+                $row = self::$aliases[ $domain ];
+                $row += self::$servers[ $domain ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+                return array( $row );
+            }
+            return array();
         }
-        return array_values( self::$aliases );
+        $out = array();
+        foreach ( self::$aliases as $d => $row ) {
+            $row += self::$servers[ $d ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+            $out[] = $row;
+        }
+        return $out;
     }
     public function list_domains() {
         return array( 'domains' => array_map(
@@ -62,6 +73,7 @@ function wp_create_nonce( $action = -1 ) { return 'nonce'; }
 function set_url_scheme( $url, $scheme = null ) { return $url; }
 function plugin_dir_url( $file ) { return 'http://example.org/'; }
 function plugin_dir_path( $file ) { return '/'; }
+function wp_list_pluck( $list, $field ) { return array(); }
 CODE
         );
         require_once __DIR__ . '/../includes/class-admin.php';

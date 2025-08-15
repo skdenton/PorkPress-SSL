@@ -883,18 +883,14 @@ class DomainServiceTest extends TestCase {
                 array( 'type' => 'A', 'ip' => '4.4.4.4' ),
             ),
         );
-        update_site_option( 'porkpress_ssl_prod_server_ip', '3.3.3.3' );
-        update_site_option( 'porkpress_ssl_dev_server_ip', '4.4.4.4' );
-
+        $wpdb = new \MockWpdb();
         $service = new class extends \PorkPress\SSL\Domain_Service {
             public function __construct() { $this->missing_credentials = false; }
         };
+        $service->set_server_ips( 'domain.test', '3.3.3.3', '4.4.4.4' );
 
         $result = $service->check_dns_health( 'domain.test' );
         $this->assertTrue( $result );
-
-        update_site_option( 'porkpress_ssl_prod_server_ip', '' );
-        update_site_option( 'porkpress_ssl_dev_server_ip', '' );
     }
 
     public function testCheckDnsHealthUsesDigFallbackWhenDnsGetRecordMissing() {
