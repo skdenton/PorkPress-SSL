@@ -527,7 +527,14 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
 
             $seen = array();
             foreach ( $domain_info['dns'] as $rec ) {
+                $type = $rec['type'] ?? '';
                 $name = $rec['name'] ?? '';
+
+                // Only consider A records for domain entries.
+                if ( 'A' !== $type ) {
+                    continue;
+                }
+
                 if ( '' === $name || '@' === $name ) {
                     continue;
                 }
