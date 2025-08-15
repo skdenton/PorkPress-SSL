@@ -25,17 +25,18 @@ class Admin {
         public function init() {
                 add_action( 'network_admin_menu', array( $this, 'register_network_menu' ) );
                 add_action( 'network_admin_menu', array( $this, 'register_site_alias_page' ) );
-               add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
-               add_action( 'wp_ajax_porkpress_ssl_bulk_action', array( $this, 'handle_bulk_action' ) );
-               add_action( 'wp_ajax_porkpress_dns_add', array( $this, 'handle_dns_add' ) );
-               add_action( 'wp_ajax_porkpress_dns_edit', array( $this, 'handle_dns_edit' ) );
-               add_action( 'wp_ajax_porkpress_dns_delete', array( $this, 'handle_dns_delete' ) );
+                add_action( 'network_admin_menu', array( $this, 'register_cert_domains_page' ) );
+                add_action( 'admin_menu', array( $this, 'register_site_menu' ) );
+                add_action( 'wp_ajax_porkpress_ssl_bulk_action', array( $this, 'handle_bulk_action' ) );
+                add_action( 'wp_ajax_porkpress_dns_add', array( $this, 'handle_dns_add' ) );
+                add_action( 'wp_ajax_porkpress_dns_edit', array( $this, 'handle_dns_edit' ) );
+                add_action( 'wp_ajax_porkpress_dns_delete', array( $this, 'handle_dns_delete' ) );
 add_action( 'wp_ajax_porkpress_dns_retrieve', array( $this, 'handle_dns_retrieve' ) );
 add_action( 'admin_init', array( $this, 'handle_ssl_actions' ) );
 add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
-               add_action( 'network_admin_notices', array( $this, 'sunrise_notice' ) );
-               add_filter( 'network_edit_site_nav_links', array( $this, 'add_site_nav_link' ) );
-       }
+                add_action( 'network_admin_notices', array( $this, 'sunrise_notice' ) );
+                add_filter( 'network_edit_site_nav_links', array( $this, 'add_site_nav_link' ) );
+        }
 
        /**
         * Display a notice if SUNRISE is not enabled.
@@ -388,6 +389,110 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                submit_button( __( 'Create Site', 'porkpress-ssl' ) );
                echo '</form>';
                echo '</div>';
+       }
+
+       /**
+        * Render certificate domain management page.
+        */
+       public function render_cert_domains_page() {
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       wp_die( esc_html__( 'You do not have permission to access this page.', 'porkpress-ssl' ) );
+               }
+
+               $cert_name = isset( $_GET['cert'] ) ? sanitize_key( wp_unslash( $_GET['cert'] ) ) : '';
+               if ( ! $cert_name ) {
+                       wp_die( esc_html__( 'Missing certificate.', 'porkpress-ssl' ) );
+               }
+
+               $certs = Certbot_Helper::list_certificates();
+               if ( empty( $certs[ $cert_name ] ) ) {
+                       wp_die( esc_html__( 'Certificate not found.', 'porkpress-ssl' ) );
+               }
+
+               $current = $certs[ $cert_name ]['domains'];
+               $used    = array();
+               foreach ( $certs as $name => $info ) {
+                       if ( $name === $cert_name ) {
+                               continue;
+                       }
+                       $used = array_merge( $used, $info['domains'] );
+               }
+
+               $service     = new Domain_Service();
+               $domain_list = $service->list_domains();
+               $available   = array();
+               if ( ! ( $domain_list instanceof Porkbun_Client_Error ) && ! empty( $domain_list['domains'] ) ) {
+                       foreach ( $domain_list['domains'] as $info ) {
+                               $root = $info['domain'] ?? $info['name'] ?? '';
+                               if ( $root && ! in_array( $root, $used, true ) && ! in_array( $root, $current, true ) ) {
+                                       $available[] = $root;
+                               }
+                       }
+               }
+
+               $options  = array_merge( $current, $available );
+               $options  = array_values( array_unique( $options ) );
+               sort( $options );
+               $redirect = network_admin_url( 'admin.php?page=porkpress-ssl&tab=ssl' );
+
+               if ( isset( $_POST['cert_domains'] ) && is_array( $_POST['cert_domains'] ) ) {
+                       check_admin_referer( 'porkpress_cert_domains_' . $cert_name );
+                       $selected = array_map( 'sanitize_text_field', wp_unslash( $_POST['cert_domains'] ) );
+                       $selected = array_values( array_filter( array_unique( $selected ) ) );
+                       if ( ! empty( $selected ) ) {
+                               $staging = function_exists( '\\get_site_option' ) ? (bool) get_site_option( 'porkpress_ssl_le_staging', 0 ) : false;
+                               $cmd     = Certbot_Helper::build_command( $selected, $cert_name, $staging, true );
+                               $result  = Runner::run( $cmd, 'certbot' );
+                               if ( 0 === $result['code'] ) {
+                                       Renewal_Service::write_manifest( $selected, $cert_name );
+                                       Logger::info(
+                                               'issue_certificate',
+                                               array(
+                                                       'cert_name' => $cert_name,
+                                                       'domains'   => $selected,
+                                               ),
+                                               'success'
+                                       );
+                                       Notifier::notify(
+                                               'success',
+                                               __( 'SSL certificate issued', 'porkpress-ssl' ),
+                                               __( 'Certificate issuance completed successfully.', 'porkpress-ssl' )
+                                       );
+                                       wp_safe_redirect( $redirect );
+                                       exit;
+                               }
+
+                               Logger::error(
+                                       'issue_certificate',
+                                       array(
+                                               'cert_name' => $cert_name,
+                                               'domains'   => $selected,
+                                               'output'    => $result['output'],
+                                       ),
+                                       'certbot failed'
+                               );
+                               Notifier::notify(
+                                       'error',
+                                       __( 'SSL issuance failed', 'porkpress-ssl' ),
+                                       __( 'Certbot failed during issuance.', 'porkpress-ssl' )
+                               );
+                               echo '<div class="notice notice-error"><p>' . esc_html__( 'Certbot failed. Check logs.', 'porkpress-ssl' ) . '</p></div>';
+                       } else {
+                               echo '<div class="notice notice-error"><p>' . esc_html__( 'No domains selected.', 'porkpress-ssl' ) . '</p></div>';
+                       }
+               }
+
+               echo '<div class="wrap">';
+               echo '<h1>' . esc_html__( 'Certificate Domains', 'porkpress-ssl' ) . '</h1>';
+               echo '<form method="post"><ul>';
+               wp_nonce_field( 'porkpress_cert_domains_' . $cert_name );
+               foreach ( $options as $domain ) {
+                       $checked = in_array( $domain, $current, true ) ? ' checked="checked"' : '';
+                       echo '<li><label><input type="checkbox" name="cert_domains[]" value="' . esc_attr( $domain ) . '"' . $checked . ' /> ' . esc_html( $domain ) . '</label></li>';
+               }
+               echo '</ul>';
+               submit_button( __( 'Save', 'porkpress-ssl' ) );
+               echo '</form></div>';
        }
 
        /**
@@ -1558,19 +1663,33 @@ echo '</tr>';
                 echo '</tbody></table>';
         }
 
-       /**
-        * Register the site alias management page.
-        */
-       public function register_site_alias_page() {
-               add_submenu_page(
-                       null,
-                       __( 'Domain Aliases', 'porkpress-ssl' ),
-                       __( 'Domain Aliases', 'porkpress-ssl' ),
-                       \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS,
-                       'porkpress-site-aliases',
-                       array( $this, 'render_site_alias_page' )
-               );
-       }
+        /**
+         * Register the site alias management page.
+         */
+        public function register_site_alias_page() {
+                add_submenu_page(
+                        null,
+                        __( 'Domain Aliases', 'porkpress-ssl' ),
+                        __( 'Domain Aliases', 'porkpress-ssl' ),
+                        \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS,
+                        'porkpress-site-aliases',
+                        array( $this, 'render_site_alias_page' )
+                );
+        }
+
+        /**
+         * Register the certificate domain management page.
+         */
+        public function register_cert_domains_page() {
+                add_submenu_page(
+                        null,
+                        __( 'Certificate Domains', 'porkpress-ssl' ),
+                        __( 'Certificate Domains', 'porkpress-ssl' ),
+                        \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS,
+                        'porkpress-cert-domains',
+                        array( $this, 'render_cert_domains_page' )
+                );
+        }
 
        /**
         * Add Domains tab to the site edit screen.
