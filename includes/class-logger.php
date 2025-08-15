@@ -58,21 +58,21 @@ dbDelta( $sql );
  * @param string $severity Log severity.
  */
 public static function log( $action, $context = array(), $result = '', $severity = 'info' ) {
-    global $wpdb;
+	global $wpdb;
 
-    $context = self::sanitize_context( wp_json_encode( $context ), false );
+	$context = self::sanitize_context( wp_json_encode( $context ) );
 
-    $wpdb->insert(
-        self::get_table_name(),
-        array(
-            'time'     => current_time( 'mysql' ),
-            'user_id'  => get_current_user_id(),
-            'action'   => $action,
-            'context'  => wp_json_encode( $context ),
-            'result'   => $result,
-            'severity' => $severity,
-        )
-    );
+	$wpdb->insert(
+		self::get_table_name(),
+		array(
+			'time'     => current_time( 'mysql' ),
+			'user_id'  => get_current_user_id(),
+			'action'   => $action,
+			'context'  => $context,
+			'result'   => $result,
+			'severity' => $severity,
+		)
+	);
 }
 
 /**
@@ -172,7 +172,11 @@ $is_email = (bool) is_email( $value );
 $is_email = false !== filter_var( $value, FILTER_VALIDATE_EMAIL );
 }
 if ( $is_email ) {
-unset( $arr[ $key ] );
+	unset( $arr[ $key ] );
+}
+$is_url = false !== filter_var( $value, FILTER_VALIDATE_URL );
+if ( $is_url ) {
+	unset( $arr[ $key ] );
 }
 }
 }
