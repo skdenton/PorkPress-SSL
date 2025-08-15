@@ -1,4 +1,11 @@
 jQuery(function($){
+    // Inject CSS for new UI elements
+    var css = '<style type="text/css">' +
+        '.porkpress-dns-toggle { vertical-align: middle !important; }' +
+        '.porkpress-dns-toggle-placeholder, .porkpress-subdomain-indent { display: inline-block; width: 28px; }' +
+    '</style>';
+    $('head').append(css);
+
     $('#porkpress-domain-actions').on('submit', function(e){
         e.preventDefault();
         var domains = $('input[name="domains[]"]:checked').map(function(){return $(this).val();}).get();
@@ -38,7 +45,23 @@ jQuery(function($){
         }
         next();
     });
+
     $('#cb-select-all').on('change', function(){
         $('input[name="domains[]"]').prop('checked', this.checked);
+    });
+
+    // New toggle logic
+    var $tableBody = $('#porkpress-domain-actions tbody');
+    $tableBody.on('click', '.porkpress-dns-toggle', function(e) {
+        e.preventDefault();
+        var $button = $(this);
+        var group = $button.data('group');
+        var $container = $tableBody.find('tr[data-parent-group="' + group + '"]');
+
+        $container.slideToggle(200);
+
+        $button.toggleClass('dashicons-arrow-right dashicons-arrow-down');
+        var isExpanded = $button.attr('aria-expanded') === 'true';
+        $button.attr('aria-expanded', !isExpanded);
     });
 });

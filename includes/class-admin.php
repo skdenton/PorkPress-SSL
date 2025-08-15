@@ -587,51 +587,93 @@ class Admin {
                        }
                }
 
-               $result = $service->list_domains();
-                if ( $result instanceof Porkbun_Client_Error ) {
-                        $message = $result->message;
-                        if ( $result->status ) {
-                                $message = sprintf( 'HTTP %d: %s', $result->status, $message );
-                        }
-                        printf( '<div class="error"><p>%s</p></div>', esc_html( $message ) );
-                        return;
-                }
+		$result = $service->list_domains();
+		if ( $result instanceof Porkbun_Client_Error ) {
+			$message = $result->message;
+			if ( $result->status ) {
+				$message = sprintf( 'HTTP %d: %s', $result->status, $message );
+			}
+			printf( '<div class="error"><p>%s</p></div>', esc_html( $message ) );
+			return;
+		}
 
-                $domains = $result['domains'] ?? array();
-               $known   = array();
-               foreach ( $domains as $d ) {
-                       $known[ strtolower( $d['domain'] ?? $d['name'] ?? '' ) ] = true;
-               }
-               foreach ( $alias_map as $name => $alias ) {
-                       if ( ! isset( $known[ $name ] ) ) {
-                               $domains[]       = array( 'domain' => $alias['domain'] );
-                               $known[ $name ] = true;
-                       }
-               }
-               $domains = array_filter(
-                       $domains,
-                       function ( $domain ) use ( $search, $status, $expiry_window ) {
-                               $name = $domain['domain'] ?? $domain['name'] ?? '';
-                               if ( $search && false === stripos( $name, $search ) ) {
-                                       return false;
-                               }
+		// --- Grouping and Filtering Logic ---
+		$all_domains_from_api = $result['domains'] ?? array();
+		$known_domains        = array();
+		foreach ( $all_domains_from_api as $d ) {
+			$domain_name = strtolower( $d['domain'] ?? $d['name'] ?? '' );
+			if ( $domain_name ) {
+				$known_domains[ $domain_name ] = true;
+			}
+		}
+		foreach ( $alias_map as $name => $alias ) {
+			if ( ! isset( $known_domains[ $name ] ) ) {
+				$all_domains_from_api[] = array( 'domain' => $alias['domain'] );
+			}
+		}
 
-                               $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
-                               if ( $status && 0 !== strcasecmp( $dns_status, $status ) ) {
-                                       return false;
-                               }
+		$root_domains_from_api = $result['root_domains'] ?? array();
+		$root_domain_names     = array_column( $root_domains_from_api, 'domain' );
+		$domains               = array(); // This will be our new grouped structure.
 
-                               if ( $expiry_window > 0 ) {
-                                       $expiry = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
-                                       $time   = strtotime( $expiry );
-                                       if ( $time && $time - time() > $expiry_window * DAY_IN_SECONDS ) {
-                                               return false;
-                                       }
-                               }
+		// Initialize with root domains.
+		foreach ( $root_domains_from_api as $root_domain_info ) {
+			$root_name                 = $root_domain_info['domain'];
+			$domains[ $root_name ] = array(
+				'domain_data'       => $root_domain_info,
+				'subdomains'        => array(),
+				'expand_by_default' => false,
+			);
+		}
 
-                               return true;
-                       }
-               );
+		$prod_server_ip = get_site_option( 'porkpress_ssl_prod_server_ip', '' );
+		$dev_server_ip  = get_site_option( 'porkpress_ssl_dev_server_ip', '' );
+		$server_ips     = array_filter( array( $prod_server_ip, $dev_server_ip ) );
+
+		// Group subdomains under their respective roots.
+		foreach ( $all_domains_from_api as $domain_info ) {
+			$current_domain_name = $domain_info['domain'] ?? '';
+			if ( ! $current_domain_name || in_array( $current_domain_name, $root_domain_names, true ) ) {
+				continue;
+			}
+
+			$parent_root = null;
+			foreach ( $root_domain_names as $root_name ) {
+				$suffix = '.' . $root_name;
+				if ( substr( $current_domain_name, -strlen( $suffix ) ) === $suffix ) {
+					$parent_root = $root_name;
+					break;
+				}
+			}
+
+			if ( $parent_root ) {
+				$domains[ $parent_root ]['subdomains'][ $current_domain_name ] = $domain_info;
+				if ( ! empty( $server_ips ) && ! $domains[ $parent_root ]['expand_by_default'] ) {
+					foreach ( $domain_info['dns'] ?? array() as $record ) {
+						if ( in_array( $record['type'], array( 'A', 'AAAA' ), true ) && in_array( $record['content'], $server_ips, true ) ) {
+							$domains[ $parent_root ]['expand_by_default'] = true;
+							break;
+						}
+					}
+				}
+			} elseif ( ! isset( $domains[ $current_domain_name ] ) ) {
+				// Standalone domain (not a known root or subdomain).
+				$domains[ $current_domain_name ] = array(
+					'domain_data'       => $domain_info,
+					'subdomains'        => array(),
+					'expand_by_default' => false,
+				);
+			}
+		}
+
+		// Sort subdomains and root domains alphabetically.
+		foreach ( $domains as &$group ) {
+			ksort( $group['subdomains'] );
+		}
+		unset( $group );
+		ksort( $domains );
+
+		// TODO: Re-implement filtering logic to work with the new grouped structure.
 
                 echo '<form method="get">';
                 echo '<input type="hidden" name="page" value="porkpress-ssl" />';
@@ -682,63 +724,63 @@ class Admin {
                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
                echo '</tr></thead><tbody>';
 
-                if ( empty( $domains ) ) {
-               echo '<tr><td colspan="5">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
-                } else {
-                       foreach ( $domains as $domain ) {
-                               $name       = $domain['domain'] ?? $domain['name'] ?? '';
-                               $expiry     = $domain['expiry'] ?? $domain['expiration'] ?? $domain['exdate'] ?? '';
-                               $dns_status = $domain['status'] ?? $domain['dnsstatus'] ?? '';
-                               $records    = $domain['dns'] ?? array();
+		if ( empty( $domains ) ) {
+			echo '<tr><td colspan="5">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+		} else {
+			$render_cell_content = function( $domain_data ) use ( $service, $site_hosts ) {
+				$name       = $domain_data['domain'] ?? $domain_data['name'] ?? '';
+				$expiry     = $domain_data['expiry'] ?? $domain_data['expiration'] ?? $domain_data['exdate'] ?? '';
+				$dns_status = $domain_data['status'] ?? $domain_data['dnsstatus'] ?? '';
 
-                               echo '<tr>';
-                               echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
-                               $toggle = empty( $records ) ? '' : '<button type="button" class="porkpress-dns-toggle dashicons dashicons-arrow-right" aria-expanded="false"></button> ';
-                               $link   = esc_url( add_query_arg( array( 'domain' => $name ) ) );
-                               echo '<td>' . $toggle . '<a href="' . $link . '">' . esc_html( $name ) . '</a></td>';
-                              $site_cell = '&mdash;';
-                              $alias     = $service->get_aliases( null, $name );
-                              if ( ! empty( $alias ) ) {
-                                      $site_id = (int) $alias[0]['site_id'];
-                                      $site    = get_site( $site_id );
-                                      if ( $site ) {
-                                              $site_name = get_blog_option( $site_id, 'blogname' );
-                                              $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
-                                              $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
-                                      }
-                              } elseif ( ! empty( $records ) ) {
-                                      foreach ( $records as $rec ) {
-                                              $target = strtolower( $rec['content'] ?? '' );
-                                              if ( isset( $site_hosts[ $target ] ) ) {
-                                                      $site     = $site_hosts[ $target ];
-                                                      $site_id  = (int) $site->blog_id;
-                                                      $site_name = get_blog_option( $site_id, 'blogname' );
-                                                      $site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
-                                                      $site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
-                                                      break;
-                                              }
-                                      }
-                              }
-                               echo '<td>' . $site_cell . '</td>';
-                               echo '<td>' . esc_html( $expiry ) . '</td>';
-                               echo '<td>' . esc_html( $dns_status ) . '</td>';
-                               echo '</tr>';
+				$site_cell = '&mdash;';
+				$alias     = $service->get_aliases( null, $name );
+				if ( ! empty( $alias ) ) {
+					$site_id = (int) $alias[0]['site_id'];
+					$site    = get_site( $site_id );
+					if ( $site ) {
+						$site_name = get_blog_option( $site_id, 'blogname' );
+						$site_url  = network_admin_url( 'site-info.php?id=' . $site_id );
+						$site_cell = sprintf( "<a href='%s'>%s</a>", esc_url( $site_url ), esc_html( $site_name ) );
+					}
+				}
+				echo '<td>' . $site_cell . '</td>';
+				echo '<td>' . esc_html( $expiry ) . '</td>';
+				echo '<td>' . esc_html( $dns_status ) . '</td>';
+			};
 
-                               if ( ! empty( $records ) ) {
-                                       echo '<tr class="porkpress-dns-details" style="display:none;"><td colspan="5">';
-                                       echo '<table class="widefat">';
-                                       echo '<thead><tr><th>' . esc_html__( 'Type', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Content', 'porkpress-ssl' ) . '</th></tr></thead><tbody>';
-                                       foreach ( $records as $rec ) {
-                                               $type    = $rec['type'] ?? '';
-                                               $rname   = $rec['name'] ?? '';
-                                               $content = $rec['content'] ?? '';
-                                               echo '<tr><td>' . esc_html( $type ) . '</td><td>' . esc_html( $rname ) . '</td><td>' . esc_html( $content ) . '</td></tr>';
-                                       }
-                                       echo '</tbody></table>';
-                                       echo '</td></tr>';
-                               }
-                       }
-               }
+			foreach ( $domains as $root_name => $group ) {
+				$domain      = $group['domain_data'];
+				$subdomains  = $group['subdomains'];
+				$is_expanded = $group['expand_by_default'];
+				$has_subs    = ! empty( $subdomains );
+				$name        = $domain['domain'] ?? $domain['name'] ?? '';
+
+				$arrow_class   = $is_expanded ? 'dashicons-arrow-down' : 'dashicons-arrow-right';
+				$toggle_button = $has_subs ? '<button type="button" class="porkpress-dns-toggle dashicons ' . $arrow_class . '" aria-expanded="' . ( $is_expanded ? 'true' : 'false' ) . '" data-group="' . esc_attr( $name ) . '"></button>' : '<span class="porkpress-dns-toggle-placeholder"></span>';
+
+				echo '<tr class="porkpress-domain-group-header" data-domain="' . esc_attr( $name ) . '">';
+				echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $name ) . '" /></th>';
+				$link = esc_url( add_query_arg( array( 'domain' => $name ) ) );
+				echo '<td>' . $toggle_button . ' <a href="' . $link . '">' . esc_html( $name ) . '</a></td>';
+				$render_cell_content( $domain );
+				echo '</tr>';
+
+				if ( $has_subs ) {
+					$container_style = $is_expanded ? '' : ' style="display:none;"';
+					echo '<tr class="porkpress-subdomain-container"' . $container_style . ' data-parent-group="' . esc_attr( $name ) . '"><td colspan="5" style="padding:0;">';
+					echo '<table class="widefat" style="margin:0; border:0;"><tbody>';
+					foreach ( $subdomains as $subdomain_name => $subdomain_data ) {
+						echo '<tr>';
+						echo '<th scope="row" class="check-column"><input type="checkbox" name="domains[]" value="' . esc_attr( $subdomain_name ) . '" /></th>';
+						$sub_link = esc_url( add_query_arg( array( 'domain' => $subdomain_name ) ) );
+						echo '<td><span class="porkpress-subdomain-indent"></span><a href="' . $sub_link . '">' . esc_html( $subdomain_name ) . '</a></td>';
+						$render_cell_content( $subdomain_data );
+						echo '</tr>';
+					}
+					echo '</tbody></table></td></tr>';
+				}
+			}
+		}
 
                echo '</tbody></table>';
                echo '<div class="tablenav bottom">';
