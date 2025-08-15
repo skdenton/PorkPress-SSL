@@ -30,8 +30,9 @@ class Admin {
                add_action( 'wp_ajax_porkpress_dns_add', array( $this, 'handle_dns_add' ) );
                add_action( 'wp_ajax_porkpress_dns_edit', array( $this, 'handle_dns_edit' ) );
                add_action( 'wp_ajax_porkpress_dns_delete', array( $this, 'handle_dns_delete' ) );
-               add_action( 'wp_ajax_porkpress_dns_retrieve', array( $this, 'handle_dns_retrieve' ) );
-               add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
+add_action( 'wp_ajax_porkpress_dns_retrieve', array( $this, 'handle_dns_retrieve' ) );
+add_action( 'admin_init', array( $this, 'handle_ssl_actions' ) );
+add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                add_action( 'network_admin_notices', array( $this, 'sunrise_notice' ) );
                add_filter( 'network_edit_site_nav_links', array( $this, 'add_site_nav_link' ) );
        }
@@ -1033,15 +1034,76 @@ class Admin {
                        wp_send_json_error( $result->get_error_message() );
                }
 
-               Logger::info( $action, array( 'domain' => $domain, 'site_id' => $site_id ), 'success' );
+Logger::info( $action, array( 'domain' => $domain, 'site_id' => $site_id ), 'success' );
 
-               wp_send_json_success( $result );
-       }
+wp_send_json_success( $result );
+}
 
-       /**
-        * Render the requests tab for the network admin page.
-        */
-       public function render_requests_tab() {
+/**
+ * Handle SSL certificate actions from the SSL tab.
+ */
+public function handle_ssl_actions() {
+if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+return;
+}
+$action = isset( $_GET['action'] ) ? sanitize_key( wp_unslash( $_GET['action'] ) ) : '';
+$cert   = isset( $_GET['cert'] ) ? sanitize_text_field( wp_unslash( $_GET['cert'] ) ) : '';
+if ( ! $action || ! $cert ) {
+return;
+}
+check_admin_referer( 'porkpress_ssl_action' );
+$cmd_cert = escapeshellarg( $cert );
+if ( 'renew' === $action ) {
+$result = Runner::run( "certbot renew --cert-name {$cmd_cert}", 'certbot' );
+if ( 0 === $result['code'] ) {
+Logger::info( 'certbot_renew', array( 'cert' => $cert, 'output' => $result['output'] ), 'success' );
+Notifier::notify(
+'success',
+__( 'SSL certificate renewed', 'porkpress-ssl' ),
+sprintf( __( 'Certificate %s renewed.', 'porkpress-ssl' ), $cert )
+);
+} else {
+Logger::error( 'certbot_renew', array( 'cert' => $cert, 'output' => $result['output'] ), 'failed' );
+Notifier::notify(
+'error',
+__( 'SSL renewal failed', 'porkpress-ssl' ),
+sprintf( __( 'Could not renew certificate %s.', 'porkpress-ssl' ), $cert )
+);
+}
+} elseif ( 'delete' === $action ) {
+$result = Runner::run( "certbot delete --cert-name {$cmd_cert} --non-interactive --quiet", 'certbot' );
+if ( 0 === $result['code'] ) {
+$state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
+$manifest   = rtrim( $state_root, '/\\' ) . '/manifest.json';
+if ( file_exists( $manifest ) ) {
+$data = json_decode( file_get_contents( $manifest ), true );
+if ( is_array( $data ) && ( $data['cert_name'] ?? '' ) === $cert ) {
+@unlink( $manifest );
+}
+}
+Logger::info( 'certbot_delete', array( 'cert' => $cert, 'output' => $result['output'] ), 'success' );
+Notifier::notify(
+'success',
+__( 'SSL certificate deleted', 'porkpress-ssl' ),
+sprintf( __( 'Certificate %s deleted.', 'porkpress-ssl' ), $cert )
+);
+} else {
+Logger::error( 'certbot_delete', array( 'cert' => $cert, 'output' => $result['output'] ), 'failed' );
+Notifier::notify(
+'error',
+__( 'SSL delete failed', 'porkpress-ssl' ),
+sprintf( __( 'Could not delete certificate %s.', 'porkpress-ssl' ), $cert )
+);
+}
+}
+wp_safe_redirect( network_admin_url( 'admin.php?page=porkpress-ssl&tab=ssl' ) );
+exit;
+}
+
+/**
+ * Render the requests tab for the network admin page.
+ */
+public function render_requests_tab() {
                if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
                        return;
                }
@@ -1385,19 +1447,27 @@ echo '<tr>';
                if ( empty( $certs ) ) {
                        echo '<tr><td colspan="5">' . esc_html__( 'No certificates found.', 'porkpress-ssl' ) . '</td></tr>';
                } else {
-                       foreach ( $certs as $name => $info ) {
-                               $domains = $info['domains'] ?? array();
-                               $expiry  = $info['expiry'] ?? '';
-                               $status  = $info['status'] ?? '';
-                               $formatted = $expiry ? date_i18n( get_option( 'date_format' ), strtotime( $expiry ) ) : '';
-                               echo '<tr>';
-                               echo '<td>' . esc_html( $name ) . '</td>';
-                               echo '<td>' . esc_html( implode( ', ', $domains ) ) . '</td>';
-                               echo '<td>' . esc_html( $formatted ) . '</td>';
-                               echo '<td>' . esc_html( $status ) . '</td>';
-                               echo '<td></td>';
-                               echo '</tr>';
-                       }
+foreach ( $certs as $name => $info ) {
+$domains     = $info['domains'] ?? array();
+$expiry      = $info['expiry'] ?? '';
+$status      = $info['status'] ?? '';
+$formatted   = $expiry ? date_i18n( get_option( 'date_format' ), strtotime( $expiry ) ) : '';
+$base        = 'admin.php?page=porkpress-ssl&tab=ssl&cert=' . rawurlencode( $name );
+$renew_url   = wp_nonce_url( network_admin_url( $base . '&action=renew' ), 'porkpress_ssl_action' );
+$del_url     = wp_nonce_url( network_admin_url( $base . '&action=delete' ), 'porkpress_ssl_action' );
+$domains_url = network_admin_url( 'admin.php?page=porkpress-cert-domains&cert=' . rawurlencode( $name ) );
+echo '<tr>';
+echo '<td>' . esc_html( $name ) . '</td>';
+echo '<td>' . esc_html( implode( ', ', $domains ) ) . '</td>';
+echo '<td>' . esc_html( $formatted ) . '</td>';
+echo '<td>' . esc_html( $status ) . '</td>';
+echo '<td>'
+. '<a href="' . esc_url( $renew_url ) . '">' . esc_html__( 'Renew', 'porkpress-ssl' ) . '</a> | '
+. '<a href="' . esc_url( $del_url ) . '">' . esc_html__( 'Delete', 'porkpress-ssl' ) . '</a> | '
+. '<a href="' . esc_url( $domains_url ) . '">' . esc_html__( 'Cert Domains', 'porkpress-ssl' ) . '</a>'
+. '</td>';
+echo '</tr>';
+}
                }
 
                echo '</tbody></table>';
