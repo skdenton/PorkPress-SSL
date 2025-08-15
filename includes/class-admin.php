@@ -95,6 +95,7 @@ class Admin {
                        'domains'   => __( 'Domains', 'porkpress-ssl' ),
                        'requests'  => __( 'Requests', 'porkpress-ssl' ),
                        'settings'  => __( 'Settings', 'porkpress-ssl' ),
+                       'ssl'       => __( 'SSL', 'porkpress-ssl' ),
                        'logs'      => __( 'Logs', 'porkpress-ssl' ),
                );
 
@@ -108,7 +109,7 @@ class Admin {
 			);
 		}
 
-                echo '</h2>';
+               echo '</h2>';
 
                switch ( $active_tab ) {
                        case 'sites':
@@ -122,6 +123,9 @@ class Admin {
                                break;
                        case 'settings':
                                $this->render_settings_tab();
+                               break;
+                       case 'ssl':
+                               $this->render_ssl_tab();
                                break;
                        case 'logs':
                                $this->render_logs_tab();
@@ -1362,6 +1366,36 @@ echo '<tr>';
         submit_button();
         echo '</form>';
 }
+
+/**
+ * Render the SSL tab for the network admin page.
+ */
+       public function render_ssl_tab() {
+               if ( ! current_user_can( \PORKPRESS_SSL_CAP_MANAGE_NETWORK_DOMAINS ) ) {
+                       return;
+               }
+
+               $certs = Certbot_Helper::list_certificates();
+
+               echo '<h2>' . esc_html__( 'Certificates', 'porkpress-ssl' ) . '</h2>';
+               echo '<table class="widefat fixed striped">';
+               echo '<thead><tr><th>' . esc_html__( 'Certificate Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Domains', 'porkpress-ssl' ) . '</th></tr></thead>';
+               echo '<tbody>';
+
+               if ( empty( $certs ) ) {
+                       echo '<tr><td colspan="2">' . esc_html__( 'No certificates found.', 'porkpress-ssl' ) . '</td></tr>';
+               } else {
+                       foreach ( $certs as $name => $info ) {
+                               $domains = $info['domains'] ?? array();
+                               echo '<tr>';
+                               echo '<td>' . esc_html( $name ) . '</td>';
+                               echo '<td>' . esc_html( implode( ', ', $domains ) ) . '</td>';
+                               echo '</tr>';
+                       }
+               }
+
+               echo '</tbody></table>';
+       }
 
 /**
  * Render the logs tab for the network admin page.
