@@ -391,7 +391,7 @@ class DomainServiceTest extends TestCase {
             protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
             protected function delete_a_record( string $domain, int $site_id ) { return true; }
             protected function queue_wildcard_aware_issuance( int $site_id, string $domain ): void {}
-            protected function clear_domain_cache(): void { $this->clears++; }
+            public function clear_domain_cache(): void { $this->clears++; }
         };
 
         $this->assertTrue( $service->add_alias( 1, 'example.com', true, 'active' ) );
@@ -970,7 +970,7 @@ class DomainServiceTest extends TestCase {
         $service = new class( $client ) extends \PorkPress\SSL\Domain_Service {
             public int $cache_clear_count = 0;
             public function __construct( $client ) { $this->client = $client; $this->missing_credentials = false; }
-            protected function clear_domain_cache(): void { $this->cache_clear_count++; }
+            public function clear_domain_cache(): void { $this->cache_clear_count++; }
             protected function create_a_record( string $domain, int $site_id, int $ttl ) { return true; }
             protected function delete_a_record( string $domain, int $site_id ) { return true; }
         };

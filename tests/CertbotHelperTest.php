@@ -29,15 +29,33 @@ class CertbotHelperTest extends TestCase {
     }
 
     public function testParseCertificatesOutput() {
+        if ( ! defined( 'DAY_IN_SECONDS' ) ) {
+            define( 'DAY_IN_SECONDS', 86400 );
+        }
         require_once __DIR__ . '/../includes/class-certbot-helper.php';
 
-        $output = "Found the following certs:\n  Certificate Name: example.com\n    Serial Number: 123\n    Key Type: RSA\n    Domains: example.com www.example.com\n    Expiry Date: 2024-01-01\n  Certificate Name: other.org\n    Serial Number: 456\n    Key Type: RSA\n    Domains: other.org\n    Expiry Date: 2024-01-01\n";
+        $valid   = date( 'Y-m-d', time() + 40 * DAY_IN_SECONDS );
+        $soon    = date( 'Y-m-d', time() + 10 * DAY_IN_SECONDS );
+        $expired = date( 'Y-m-d', time() - DAY_IN_SECONDS );
+
+        $output = "Found the following certs:\n"
+            . "  Certificate Name: valid.com\n    Serial Number: 123\n    Key Type: RSA\n    Domains: valid.com www.valid.com\n    Expiry Date: $valid\n"
+            . "  Certificate Name: soon.com\n    Serial Number: 456\n    Key Type: RSA\n    Domains: soon.com\n    Expiry Date: $soon\n"
+            . "  Certificate Name: expired.com\n    Serial Number: 789\n    Key Type: RSA\n    Domains: expired.com\n    Expiry Date: $expired\n";
 
         $parsed = \PorkPress\SSL\Certbot_Helper::parse_certificates_output( $output );
 
-        $this->assertArrayHasKey( 'example.com', $parsed );
-        $this->assertSame( [ 'example.com', 'www.example.com' ], $parsed['example.com']['domains'] );
-        $this->assertArrayHasKey( 'other.org', $parsed );
-        $this->assertSame( [ 'other.org' ], $parsed['other.org']['domains'] );
+        $this->assertSame( $valid, $parsed['valid.com']['expiry'] );
+        $this->assertSame( 'Valid', $parsed['valid.com']['status'] );
+
+        $this->assertSame( $soon, $parsed['soon.com']['expiry'] );
+        $this->assertSame( 'Expiring Soon', $parsed['soon.com']['status'] );
+
+        $this->assertSame( $expired, $parsed['expired.com']['expiry'] );
+        $this->assertSame( 'Expired', $parsed['expired.com']['status'] );
+
+        $this->assertSame( [ 'valid.com', 'www.valid.com' ], $parsed['valid.com']['domains'] );
+        $this->assertSame( [ 'soon.com' ], $parsed['soon.com']['domains'] );
+        $this->assertSame( [ 'expired.com' ], $parsed['expired.com']['domains'] );
     }
 }
