@@ -141,16 +141,16 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                        if ( '' !== $v6 ) {
                                $expected_ipv6 = array_filter( preg_split( '/[,\s]+/', $v6 ) );
                        }
-                       $prod = trim( (string) get_site_option( 'porkpress_ssl_prod_server_ip', '' ) );
-                       if ( '' !== $prod ) {
-                               $expected_ipv4[] = $prod;
-                       }
-                       $dev = trim( (string) get_site_option( 'porkpress_ssl_dev_server_ip', '' ) );
-                       if ( '' !== $dev ) {
-                               $expected_ipv4[] = $dev;
-                       }
-                       $expected_ipv4 = array_filter( array_unique( $expected_ipv4 ) );
                }
+
+               $server_ips = $this->get_server_ips( $domain );
+               if ( ! empty( $server_ips['prod_server_ip'] ) ) {
+                       $expected_ipv4[] = $server_ips['prod_server_ip'];
+               }
+               if ( ! empty( $server_ips['dev_server_ip'] ) ) {
+                       $expected_ipv4[] = $server_ips['dev_server_ip'];
+               }
+               $expected_ipv4 = array_filter( array_unique( $expected_ipv4 ) );
 
                if ( empty( $expected_ipv4 ) && function_exists( 'gethostbynamel' ) ) {
                        $expected_ipv4 = (array) gethostbynamel( $expected_host );
@@ -1303,7 +1303,107 @@ UNIQUE KEY domain (domain)
 ) {$charset_collate};";
 
                require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+       dbDelta( $sql );
+}
+
+       /**
+        * Get the domain servers table name.
+        *
+        * @return string
+        */
+       public static function get_server_table_name(): string {
+               global $wpdb;
+
+               return $wpdb->base_prefix . 'porkpress_domain_servers';
+       }
+
+       /**
+        * Create the domain servers table if it does not exist.
+        */
+       public static function create_server_table(): void {
+               global $wpdb;
+
+               $table_name      = self::get_server_table_name();
+               $charset_collate = $wpdb->get_charset_collate();
+
+               $sql = "CREATE TABLE {$table_name} (
+domain varchar(191) NOT NULL,
+prod_server_ip varchar(45) NOT NULL DEFAULT '',
+dev_server_ip varchar(45) NOT NULL DEFAULT '',
+PRIMARY KEY  (domain)
+) {$charset_collate};";
+
+               require_once ABSPATH . 'wp-admin/includes/upgrade.php';
                dbDelta( $sql );
+       }
+
+       /**
+        * Retrieve server IPs for a domain.
+        *
+        * @param string $domain Domain name.
+        * @return array{prod_server_ip:string,dev_server_ip:string}
+        */
+       public function get_server_ips( string $domain ): array {
+               global $wpdb;
+
+               $table = self::get_server_table_name();
+               $sql   = $wpdb->prepare( "SELECT prod_server_ip, dev_server_ip FROM {$table} WHERE domain = %s", strtolower( sanitize_text_field( $domain ) ) );
+               $rows  = $wpdb->get_results( $sql, ARRAY_A );
+
+               return $rows[0] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+       }
+
+       /**
+        * Set server IPs for a domain.
+        *
+        * @param string $domain Domain name.
+        * @param string $prod   Production server IP.
+        * @param string $dev    Development server IP.
+        * @return bool
+        */
+       public function set_server_ips( string $domain, string $prod = '', string $dev = '' ): bool {
+               global $wpdb;
+
+               $table  = self::get_server_table_name();
+               $domain = strtolower( sanitize_text_field( $domain ) );
+
+               $existing = $wpdb->get_results( $wpdb->prepare( "SELECT domain FROM {$table} WHERE domain = %s", $domain ), ARRAY_A );
+               if ( empty( $existing ) ) {
+                       return false !== $wpdb->insert(
+                               $table,
+                               array(
+                                       'domain'         => $domain,
+                                       'prod_server_ip' => $prod,
+                                       'dev_server_ip'  => $dev,
+                               ),
+                               array( '%s', '%s', '%s' )
+                       );
+               }
+
+               $result = $wpdb->update(
+                       $table,
+                       array(
+                               'prod_server_ip' => $prod,
+                               'dev_server_ip'  => $dev,
+                       ),
+                       array( 'domain' => $domain ),
+                       array( '%s', '%s' ),
+                       array( '%s' )
+               );
+
+               return false !== $result;
+       }
+
+       /**
+        * Delete server IPs for a domain.
+        */
+       public function delete_server_ips( string $domain ): bool {
+               global $wpdb;
+
+               $table = self::get_server_table_name();
+               $result = $wpdb->delete( $table, array( 'domain' => strtolower( sanitize_text_field( $domain ) ) ), array( '%s' ) );
+
+               return false !== $result;
        }
 
        /**
@@ -1413,21 +1513,22 @@ UNIQUE KEY domain (domain)
        public function get_aliases( ?int $site_id = null, ?string $domain = null ): array {
                global $wpdb;
 
-               $table  = self::get_alias_table_name();
-               $where  = array();
-               $params = array();
+               $alias_table   = self::get_alias_table_name();
+               $server_table  = self::get_server_table_name();
+               $where         = array();
+               $params        = array();
 
                if ( null !== $site_id ) {
-                       $where[]  = 'site_id = %d';
+                       $where[]  = 'a.site_id = %d';
                        $params[] = $site_id;
                }
 
                if ( null !== $domain ) {
-                       $where[]  = 'domain = %s';
+                       $where[]  = 'a.domain = %s';
                        $params[] = strtolower( sanitize_text_field( $domain ) );
                }
 
-               $sql = "SELECT * FROM {$table}";
+               $sql = "SELECT a.*, s.prod_server_ip, s.dev_server_ip FROM {$alias_table} a LEFT JOIN {$server_table} s ON a.domain = s.domain";
                if ( $where ) {
                        $sql .= ' WHERE ' . implode( ' AND ', $where );
                        $sql  = $wpdb->prepare( $sql, $params );

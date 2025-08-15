@@ -21,6 +21,15 @@ class Renewal_Service {
     public static function get_apache_reload_cmd() { return ''; }
 }
 class Certbot_Helper { public static function list_certificates() { return array(); } }
+class Domain_Service {
+    public static $servers = array();
+    public function get_server_ips( string $domain = '' ): array {
+        return self::$servers[ $domain ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+    }
+    public function set_server_ips( string $domain, string $prod, string $dev ): void {
+        self::$servers[ $domain ] = array( 'prod_server_ip' => $prod, 'dev_server_ip' => $dev );
+    }
+}
 function update_site_option( $key, $value ) { $GLOBALS['porkpress_site_options'][ $key ] = $value; }
 function get_site_option( $key, $default = '' ) { return $GLOBALS['porkpress_site_options'][ $key ] ?? $default; }
 function check_admin_referer( $action, $name = '' ) { return true; }
@@ -79,6 +88,15 @@ class Renewal_Service {
     public static function get_apache_reload_cmd() { return ''; }
 }
 class Certbot_Helper { public static function list_certificates() { return array(); } }
+class Domain_Service {
+    public static $servers = array();
+    public function get_server_ips( string $domain = '' ): array {
+        return self::$servers[ $domain ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+    }
+    public function set_server_ips( string $domain, string $prod, string $dev ): void {
+        self::$servers[ $domain ] = array( 'prod_server_ip' => $prod, 'dev_server_ip' => $dev );
+    }
+}
 function update_site_option( $key, $value ) { $GLOBALS['porkpress_site_options'][ $key ] = $value; }
 function get_site_option( $key, $default = '' ) { return $GLOBALS['porkpress_site_options'][ $key ] ?? $default; }
 function check_admin_referer( $action, $name = '' ) { return true; }
@@ -138,6 +156,15 @@ class Renewal_Service {
     public static function get_apache_reload_cmd() { return ''; }
 }
 class Certbot_Helper { public static function list_certificates() { return array(); } }
+class Domain_Service {
+    public static $servers = array();
+    public function get_server_ips( string $domain = '' ): array {
+        return self::$servers[ $domain ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+    }
+    public function set_server_ips( string $domain, string $prod, string $dev ): void {
+        self::$servers[ $domain ] = array( 'prod_server_ip' => $prod, 'dev_server_ip' => $dev );
+    }
+}
 function update_site_option( $key, $value ) { $GLOBALS['porkpress_site_options'][ $key ] = $value; }
 function get_site_option( $key, $default = '' ) { return $GLOBALS['porkpress_site_options'][ $key ] ?? $default; }
 function check_admin_referer( $action, $name = '' ) { return true; }
@@ -170,8 +197,8 @@ CODE
         $admin->render_settings_tab();
         ob_end_clean();
 
-        $this->assertSame( '10.0.0.1', $GLOBALS['porkpress_site_options']['porkpress_ssl_prod_server_ip'] );
-        $this->assertSame( '10.0.0.2', $GLOBALS['porkpress_site_options']['porkpress_ssl_dev_server_ip'] );
+        $this->assertSame( '10.0.0.1', \PorkPress\SSL\Domain_Service::$servers['']['prod_server_ip'] );
+        $this->assertSame( '10.0.0.2', \PorkPress\SSL\Domain_Service::$servers['']['dev_server_ip'] );
 
         $_POST = array();
         ob_start();

@@ -681,9 +681,6 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                        echo '<p>' . sprintf( esc_html__( 'Last refresh: %s', 'porkpress-ssl' ), esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last_refresh ) ) ) . '</p>';
                }
 
-               $prod_server_ip = get_site_option( 'porkpress_ssl_prod_server_ip', '' );
-               $dev_server_ip  = get_site_option( 'porkpress_ssl_dev_server_ip', '' );
-
                $aliases   = $service->get_aliases();
                $alias_map = array();
                foreach ( $aliases as $alias ) {
@@ -783,13 +780,15 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                echo '<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all" /></td>';
                echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Site', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Prod IP', 'porkpress-ssl' ) . '</th>';
+               echo '<th>' . esc_html__( 'Dev IP', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Server', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
                echo '</tr></thead><tbody>';
 
                 if ( empty( $domains ) ) {
-               echo '<tr><td colspan="6">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+               echo '<tr><td colspan="8">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
                 } else {
                        foreach ( $domains as $domain ) {
                                $name       = $domain['domain'] ?? $domain['name'] ?? '';
@@ -832,7 +831,13 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                                               }
                                       }
                               }
+                               $alias_info     = $alias_map[ strtolower( $name ) ] ?? array();
+                               $prod_server_ip = $alias_info['prod_server_ip'] ?? '';
+                               $dev_server_ip  = $alias_info['dev_server_ip'] ?? '';
+
                                echo '<td>' . $site_cell . '</td>';
+                               echo '<td>' . esc_html( $prod_server_ip ) . '</td>';
+                               echo '<td>' . esc_html( $dev_server_ip ) . '</td>';
 
                                $server = 'N/A';
                                $all_records = array_merge( $records, ...array_map( fn($s) => $s['dns'] ?? [], $subdomains ) );
@@ -1335,8 +1340,9 @@ $state_root_locked = defined( 'PORKPRESS_STATE_ROOT' );
             }
         }
 
-        if ( isset( $_POST['porkpress_ssl_settings_nonce'] ) ) {
-            check_admin_referer( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
+       $domain_service = new Domain_Service();
+       if ( isset( $_POST['porkpress_ssl_settings_nonce'] ) ) {
+           check_admin_referer( 'porkpress_ssl_settings', 'porkpress_ssl_settings_nonce' );
 
 if ( ! $api_key_locked && isset( $_POST['porkpress_api_key'] ) ) {
 update_site_option( 'porkpress_ssl_api_key', sanitize_text_field( wp_unslash( $_POST['porkpress_api_key'] ) ) );
@@ -1390,18 +1396,21 @@ if ( isset( $_POST['porkpress_ipv6'] ) ) {
     update_site_option( 'porkpress_ssl_ipv6_override', $ipv6_override );
 }
 
+           $server_ips     = $domain_service->get_server_ips( '' );
+
            if ( isset( $_POST['porkpress_prod_server'] ) ) {
-               $prod_server_ip = sanitize_text_field( wp_unslash( $_POST['porkpress_prod_server'] ) );
-               if ( filter_var( $prod_server_ip, FILTER_VALIDATE_IP ) ) {
-                       update_site_option( 'porkpress_ssl_prod_server_ip', $prod_server_ip );
+               $prod_ip = sanitize_text_field( wp_unslash( $_POST['porkpress_prod_server'] ) );
+               if ( filter_var( $prod_ip, FILTER_VALIDATE_IP ) ) {
+                       $server_ips['prod_server_ip'] = $prod_ip;
                }
            }
            if ( isset( $_POST['porkpress_dev_server'] ) ) {
-               $dev_server_ip = sanitize_text_field( wp_unslash( $_POST['porkpress_dev_server'] ) );
-               if ( filter_var( $dev_server_ip, FILTER_VALIDATE_IP ) ) {
-                       update_site_option( 'porkpress_ssl_dev_server_ip', $dev_server_ip );
+               $dev_ip = sanitize_text_field( wp_unslash( $_POST['porkpress_dev_server'] ) );
+               if ( filter_var( $dev_ip, FILTER_VALIDATE_IP ) ) {
+                       $server_ips['dev_server_ip'] = $dev_ip;
                }
            }
+           $domain_service->set_server_ips( '', $server_ips['prod_server_ip'], $server_ips['dev_server_ip'] );
 
 $cert_name = get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
@@ -1463,8 +1472,9 @@ $txt_timeout  = max( 1, absint( get_site_option( 'porkpress_ssl_txt_timeout', 60
 $txt_interval = max( 1, absint( get_site_option( 'porkpress_ssl_txt_interval', 30 ) ) );
 $ipv4_override = get_site_option( 'porkpress_ssl_ipv4_override', '' );
 $ipv6_override = get_site_option( 'porkpress_ssl_ipv6_override', '' );
-               $prod_server_ip = get_site_option( 'porkpress_ssl_prod_server_ip', '' );
-               $dev_server_ip  = get_site_option( 'porkpress_ssl_dev_server_ip', '' );
+               $server_ips    = $domain_service->get_server_ips( '' );
+               $prod_server_ip = $server_ips['prod_server_ip'] ?? '';
+               $dev_server_ip  = $server_ips['dev_server_ip'] ?? '';
 $cert_name = $cert_name_locked ? PORKPRESS_CERT_NAME : get_site_option( 'porkpress_ssl_cert_name', defined( 'PORKPRESS_CERT_NAME' ) ? PORKPRESS_CERT_NAME : 'porkpress-network' );
 $cert_root = $cert_root_locked ? PORKPRESS_CERT_ROOT : get_site_option( 'porkpress_ssl_cert_root', defined( 'PORKPRESS_CERT_ROOT' ) ? PORKPRESS_CERT_ROOT : '/etc/letsencrypt' );
 $state_root = $state_root_locked ? PORKPRESS_STATE_ROOT : get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );

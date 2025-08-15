@@ -59,6 +59,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 function porkpress_ssl_activate() {
         \PorkPress\SSL\Logger::create_table();
        \PorkPress\SSL\Domain_Service::create_alias_table();
+       \PorkPress\SSL\Domain_Service::create_server_table();
        if ( ! wp_next_scheduled( 'porkpress_ssl_reconcile' ) ) {
                wp_schedule_event( time(), 'daily', 'porkpress_ssl_reconcile' );
        }
@@ -175,6 +176,11 @@ function porkpress_ssl_init() {
        $alias_table = \PorkPress\SSL\Domain_Service::get_alias_table_name();
        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $alias_table ) ) !== $alias_table ) {
                \PorkPress\SSL\Domain_Service::create_alias_table();
+       }
+
+       $server_table = \PorkPress\SSL\Domain_Service::get_server_table_name();
+       if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $server_table ) ) !== $server_table ) {
+               \PorkPress\SSL\Domain_Service::create_server_table();
        }
 
        $admin = new \PorkPress\SSL\Admin();
