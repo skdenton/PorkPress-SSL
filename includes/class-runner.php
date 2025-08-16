@@ -49,7 +49,7 @@ class Runner {
      * Execute a command without any sudo handling.
      *
      * @param string $cmd Command to run.
-     * @return array{code:int,output:string}
+     * @return array{code:int,output:string,stdout:string,stderr:string}
      */
     protected static function raw_run( string $cmd ): array {
         $method = self::method();
@@ -60,16 +60,32 @@ class Runner {
             );
             $proc = proc_open( $cmd, $desc, $pipes );
             if ( ! is_resource( $proc ) ) {
-                return array( 'code' => 1, 'output' => '' );
+                return array(
+                    'code'   => 1,
+                    'output' => '',
+                    'stdout' => '',
+                    'stderr' => '',
+                );
             }
-            $output = stream_get_contents( $pipes[1] ) . stream_get_contents( $pipes[2] );
+            $stdout = stream_get_contents( $pipes[1] );
+            $stderr = stream_get_contents( $pipes[2] );
             foreach ( $pipes as $p ) {
                 fclose( $p );
             }
             $code = proc_close( $proc );
-            return array( 'code' => (int) $code, 'output' => $output );
+            return array(
+                'code'   => (int) $code,
+                'output' => $stdout . $stderr,
+                'stdout' => $stdout,
+                'stderr' => $stderr,
+            );
         }
-        return array( 'code' => 127, 'output' => 'command execution not available' );
+        return array(
+            'code'   => 127,
+            'output' => 'command execution not available',
+            'stdout' => '',
+            'stderr' => 'command execution not available',
+        );
     }
 
     /**
@@ -111,7 +127,7 @@ class Runner {
      *
      * @param string $cmd     Command to execute.
      * @param string $context Command context for sudo allow-list.
-     * @return array{code:int,output:string}
+     * @return array{code:int,output:string,stdout:string,stderr:string}
      */
     public static function run( string $cmd, string $context = '' ): array {
         $cmd = self::maybe_sudo( $cmd, $context );
