@@ -5,7 +5,7 @@ use PHPUnit\Framework\TestCase;
  * @runTestsInSeparateProcesses
  */
 class RenderDomainsTabTest extends TestCase {
-    public function testMappedDomainDisplaysBlogName() {
+    public function testMappedDomainDisplaysBlogNameAndServer() {
         if ( ! defined( 'ABSPATH' ) ) {
             define( 'ABSPATH', __DIR__ );
         }
@@ -41,7 +41,12 @@ class Domain_Service {
     }
     public function list_domains() {
         return array( 'domains' => array_map(
-            function ( $d ) { return array( 'domain' => $d, 'dns' => array() ); },
+            function ( $d ) {
+                if ( is_array( $d ) ) {
+                    return $d;
+                }
+                return array( 'domain' => $d, 'dns' => array() );
+            },
             self::$domains
         ) );
     }
@@ -78,9 +83,25 @@ CODE
         );
         require_once __DIR__ . '/../includes/class-admin.php';
 
-        \PorkPress\SSL\Domain_Service::$domains = array( 'example.com' );
+        \PorkPress\SSL\Domain_Service::$domains = array(
+            array(
+                'domain' => 'example.com',
+                'dns'    => array(
+                    array( 'type' => 'A', 'content' => '203.0.113.10' ),
+                ),
+            ),
+            array(
+                'domain' => 'nomatch.com',
+                'dns'    => array(
+                    array( 'type' => 'A', 'content' => '203.0.113.20' ),
+                ),
+            ),
+        );
         \PorkPress\SSL\Domain_Service::$aliases = array(
             'example.com' => array( 'domain' => 'example.com', 'site_id' => 123 ),
+        );
+        \PorkPress\SSL\Domain_Service::$servers = array(
+            'example.com' => array( 'prod_server_ip' => '203.0.113.10', 'dev_server_ip' => '' ),
         );
 
         $admin = new \PorkPress\SSL\Admin();
@@ -89,5 +110,22 @@ CODE
         $output = ob_get_clean();
 
         $this->assertStringContainsString( 'Blog 123', $output );
+
+        $dom = new \DOMDocument();
+        @$dom->loadHTML( $output );
+        $rows    = $dom->getElementsByTagName( 'tr' );
+        $servers = array();
+        foreach ( $rows as $tr ) {
+            $links = $tr->getElementsByTagName( 'a' );
+            if ( $links->length ) {
+                $domain = trim( $links->item( 0 )->nodeValue );
+                $tds    = $tr->getElementsByTagName( 'td' );
+                if ( $tds->length >= 5 ) {
+                    $servers[ $domain ] = trim( $tds->item( 4 )->nodeValue );
+                }
+            }
+        }
+        $this->assertSame( 'Prod', $servers['example.com'] );
+        $this->assertSame( '', $servers['nomatch.com'] );
     }
 }
