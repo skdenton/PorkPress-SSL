@@ -743,10 +743,12 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                        }
                );
 
-                echo '<form method="get">';
-                echo '<input type="hidden" name="page" value="porkpress-ssl" />';
-                echo '<input type="hidden" name="tab" value="domains" />';
-                echo '<p class="search-box">';
+               $default_ips = $service->get_server_ips( '' );
+
+               echo '<form method="get">';
+               echo '<input type="hidden" name="page" value="porkpress-ssl" />';
+               echo '<input type="hidden" name="tab" value="domains" />';
+               echo '<p class="search-box">';
                 echo '<label class="screen-reader-text" for="domain-search-input">' . esc_html__( 'Search domains', 'porkpress-ssl' ) . '</label>';
                 echo '<input type="search" id="domain-search-input" name="s" value="' . esc_attr( $search ) . '" />';
                 submit_button( __( 'Search Domains', 'porkpress-ssl' ), '', '', false, array( 'id' => 'search-submit' ) );
@@ -831,9 +833,9 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                                               }
                                       }
                               }
-                               $alias_info     = $alias_map[ strtolower( $name ) ] ?? array();
-                               $prod_server_ip = $alias_info['prod_server_ip'] ?? '';
-                               $dev_server_ip  = $alias_info['dev_server_ip'] ?? '';
+                              $alias_info     = $alias_map[ strtolower( $name ) ] ?? array();
+                              $prod_server_ip = $alias_info['prod_server_ip'] ?? $default_ips['prod_server_ip'];
+                              $dev_server_ip  = $alias_info['dev_server_ip']  ?? $default_ips['dev_server_ip'];
 
                                echo '<td>' . $site_cell . '</td>';
                                echo '<td>' . esc_html( $prod_server_ip ) . '</td>';
