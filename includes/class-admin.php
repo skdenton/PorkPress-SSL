@@ -839,8 +839,8 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                                echo '<td>' . esc_html( $prod_server_ip ) . '</td>';
                                echo '<td>' . esc_html( $dev_server_ip ) . '</td>';
 
-                               $server = 'N/A';
-                               $all_records = array_merge( $records, ...array_map( fn($s) => $s['dns'] ?? [], $subdomains ) );
+                               $server = '';
+                               $all_records = array_merge( $records, ...array_map( fn ( $s ) => $s['dns'] ?? [], $subdomains ) );
                                foreach ( $all_records as $record ) {
                                    if ( 'A' === $record['type'] ) {
                                        if ( ! empty( $prod_server_ip ) && $record['content'] === $prod_server_ip ) {
