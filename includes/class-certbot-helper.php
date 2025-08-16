@@ -83,7 +83,7 @@ class Certbot_Helper {
     public static function list_certificates(): array {
         $certbot_cmd = function_exists( '\\get_site_option' ) ? \get_site_option( 'porkpress_ssl_certbot_cmd', 'certbot' ) : 'certbot';
         $cmd         = escapeshellcmd( $certbot_cmd ) . ' certificates';
-        $result      = Runner::run( $cmd . ' 2>/dev/null', 'certbot' );
+        $result      = Runner::run( $cmd, 'certbot' );
         $user        = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
 
         if ( 0 !== $result['code'] ) {
@@ -91,20 +91,32 @@ class Certbot_Helper {
                 'certbot_list',
                 array(
                     'cmd'    => $cmd,
-                    'output' => $result['output'],
+                    'stdout' => $result['stdout'] ?? '',
+                    'stderr' => $result['stderr'] ?? '',
+                    'code'   => $result['code'],
                     'user_id' => $user,
                 ),
                 'failed'
             );
+            $summary = trim( $result['stderr'] ?? '' );
+            if ( '' === $summary ) {
+                $summary = trim( $result['stdout'] ?? '' );
+            }
+            if ( '' === $summary ) {
+                $summary = function_exists( '__' ) ? __( 'Unable to list certificates.', 'porkpress-ssl' ) : 'Unable to list certificates.';
+            }
+            if ( 127 === (int) $result['code'] ) {
+                $summary .= ' ' . ( function_exists( '__' ) ? __( 'Certbot binary not found.', 'porkpress-ssl' ) : 'Certbot binary not found.' );
+            }
             Notifier::notify(
                 'error',
                 function_exists( '__' ) ? __( 'Certbot list failed', 'porkpress-ssl' ) : 'Certbot list failed',
-                function_exists( '__' ) ? __( 'Unable to list certificates.', 'porkpress-ssl' ) : 'Unable to list certificates.'
+                $summary
             );
             return array();
         }
 
-        $output = trim( $result['output'] );
+        $output = trim( $result['stdout'] ?? $result['output'] );
         if ( '' === $output ) {
             Logger::warn(
                 'certbot_list',

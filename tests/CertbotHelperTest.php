@@ -102,4 +102,46 @@ class CertbotHelperTest extends TestCase {
         $this->assertArrayHasKey( 'custom.com', $certs );
         $this->assertSame( array( 'custom.com' ), $certs['custom.com']['domains'] );
     }
+
+    /**
+     * Ensure a notice is emitted when certbot list fails.
+     *
+     * @runInSeparateProcess
+     */
+    public function testListCertificatesNotifiesOnFailure() {
+        if ( ! defined( 'ABSPATH' ) ) {
+            define( 'ABSPATH', __DIR__ );
+        }
+
+        if ( ! class_exists( '\\PorkPress\\SSL\\Logger', false ) ) {
+            eval( 'namespace PorkPress\\SSL; class Logger { public static function error(...$args){} public static function warn(...$args){} public static function info(...$args){} }' );
+        }
+        if ( ! class_exists( '\\PorkPress\\SSL\\Notifier', false ) ) {
+            eval( 'namespace PorkPress\\SSL; class Notifier { public static $last = null; public static function notify(...$args){ self::$last = $args; } }' );
+        }
+
+        $script = tempnam( sys_get_temp_dir(), 'certbot' );
+        $content  = "#!/bin/sh\n";
+        $content .= "echo boom >&2\n";
+        $content .= "exit 1\n";
+        file_put_contents( $script, $content );
+        chmod( $script, 0700 );
+
+        $GLOBALS['pp_ssl_site_options'] = array( 'porkpress_ssl_certbot_cmd' => $script );
+        if ( ! function_exists( 'get_site_option' ) ) {
+            function get_site_option( $key, $default = false ) {
+                return $GLOBALS['pp_ssl_site_options'][ $key ] ?? $default;
+            }
+        }
+
+        require_once __DIR__ . '/../includes/class-certbot-helper.php';
+
+        \PorkPress\SSL\Certbot_Helper::list_certificates();
+
+        unlink( $script );
+
+        $this->assertNotNull( \PorkPress\SSL\Notifier::$last );
+        $this->assertSame( 'error', \PorkPress\SSL\Notifier::$last[0] );
+        $this->assertStringContainsString( 'boom', \PorkPress\SSL\Notifier::$last[2] );
+    }
 }
