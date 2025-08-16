@@ -121,7 +121,7 @@ CODE
                 $domain = trim( $links->item( 0 )->nodeValue );
                 $tds    = $tr->getElementsByTagName( 'td' );
                 if ( $tds->length >= 5 ) {
-                    $servers[ $domain ] = trim( $tds->item( 4 )->nodeValue );
+                    $servers[ $domain ] = trim( $tds->item( 2 )->nodeValue );
                 }
             }
         }
