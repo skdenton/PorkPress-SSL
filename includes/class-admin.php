@@ -782,15 +782,13 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                echo '<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all" /></td>';
                echo '<th>' . esc_html__( 'Name', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Site', 'porkpress-ssl' ) . '</th>';
-               echo '<th>' . esc_html__( 'Prod IP', 'porkpress-ssl' ) . '</th>';
-               echo '<th>' . esc_html__( 'Dev IP', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Server', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'Expiry', 'porkpress-ssl' ) . '</th>';
                echo '<th>' . esc_html__( 'DNS Status', 'porkpress-ssl' ) . '</th>';
                echo '</tr></thead><tbody>';
 
                 if ( empty( $domains ) ) {
-               echo '<tr><td colspan="8">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
+               echo '<tr><td colspan="6">' . esc_html__( 'No domains found.', 'porkpress-ssl' ) . '</td></tr>';
                 } else {
                        foreach ( $domains as $domain ) {
                                $name       = $domain['domain'] ?? $domain['name'] ?? '';
@@ -838,8 +836,6 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                               $dev_server_ip  = $alias_info['dev_server_ip']  ?? $default_ips['dev_server_ip'];
 
                                echo '<td>' . $site_cell . '</td>';
-                               echo '<td>' . esc_html( $prod_server_ip ) . '</td>';
-                               echo '<td>' . esc_html( $dev_server_ip ) . '</td>';
 
                                $server = '';
                                $all_records = array_merge( $records, ...array_map( fn ( $s ) => $s['dns'] ?? [], $subdomains ) );
