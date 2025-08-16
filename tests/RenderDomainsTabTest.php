@@ -27,17 +27,25 @@ class Domain_Service {
             $domain = strtolower( $domain );
             if ( isset( self::$aliases[ $domain ] ) ) {
                 $row = self::$aliases[ $domain ];
-                $row += self::$servers[ $domain ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+                if ( isset( self::$servers[ $domain ] ) ) {
+                    $row += self::$servers[ $domain ];
+                }
                 return array( $row );
             }
             return array();
         }
         $out = array();
         foreach ( self::$aliases as $d => $row ) {
-            $row += self::$servers[ $d ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+            if ( isset( self::$servers[ $d ] ) ) {
+                $row += self::$servers[ $d ];
+            }
             $out[] = $row;
         }
         return $out;
+    }
+    public function get_server_ips( string $domain = '' ): array {
+        $domain = strtolower( $domain );
+        return self::$servers[ $domain ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
     }
     public function list_domains() {
         return array( 'domains' => array_map(
@@ -96,12 +104,28 @@ CODE
                     array( 'type' => 'A', 'content' => '203.0.113.20' ),
                 ),
             ),
+            array(
+                'domain' => 'devmatch.com',
+                'dns'    => array(
+                    array( 'type' => 'A', 'content' => '203.0.113.40' ),
+                ),
+            ),
+            array(
+                'domain' => 'prodfallback.com',
+                'dns'    => array(
+                    array( 'type' => 'A', 'content' => '203.0.113.30' ),
+                ),
+            ),
         );
         \PorkPress\SSL\Domain_Service::$aliases = array(
-            'example.com' => array( 'domain' => 'example.com', 'site_id' => 123 ),
+            'example.com'       => array( 'domain' => 'example.com', 'site_id' => 123 ),
+            'devmatch.com'      => array( 'domain' => 'devmatch.com', 'site_id' => 456 ),
+            'prodfallback.com'  => array( 'domain' => 'prodfallback.com', 'site_id' => 789 ),
         );
         \PorkPress\SSL\Domain_Service::$servers = array(
-            'example.com' => array( 'prod_server_ip' => '203.0.113.10', 'dev_server_ip' => '' ),
+            ''             => array( 'prod_server_ip' => '203.0.113.30', 'dev_server_ip' => '203.0.113.40' ),
+            'example.com'  => array( 'prod_server_ip' => '203.0.113.10', 'dev_server_ip' => '' ),
+            'devmatch.com' => array( 'prod_server_ip' => '', 'dev_server_ip' => '203.0.113.40' ),
         );
 
         $admin = new \PorkPress\SSL\Admin();
@@ -126,6 +150,8 @@ CODE
             }
         }
         $this->assertSame( 'Prod', $servers['example.com'] );
+        $this->assertSame( 'Dev', $servers['devmatch.com'] );
+        $this->assertSame( 'Prod', $servers['prodfallback.com'] );
         $this->assertSame( '', $servers['nomatch.com'] );
     }
 }
