@@ -831,9 +831,18 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                                               }
                                       }
                               }
-                              $alias_info     = $alias_map[ strtolower( $name ) ] ?? array();
-                              $prod_server_ip = $alias_info['prod_server_ip'] ?? $default_ips['prod_server_ip'];
-                              $dev_server_ip  = $alias_info['dev_server_ip']  ?? $default_ips['dev_server_ip'];
+                              $alias_info = $alias_map[ strtolower( $name ) ] ?? array();
+                              $domain_ips = $service->get_server_ips( $name );
+                              $prod_server_ip = ! empty( $alias_info['prod_server_ip'] )
+                                      ? $alias_info['prod_server_ip']
+                                      : ( ! empty( $domain_ips['prod_server_ip'] )
+                                              ? $domain_ips['prod_server_ip']
+                                              : $default_ips['prod_server_ip'] );
+                              $dev_server_ip  = ! empty( $alias_info['dev_server_ip'] )
+                                      ? $alias_info['dev_server_ip']
+                                      : ( ! empty( $domain_ips['dev_server_ip'] )
+                                              ? $domain_ips['dev_server_ip']
+                                              : $default_ips['dev_server_ip'] );
 
                                echo '<td>' . $site_cell . '</td>';
 
