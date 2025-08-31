@@ -50,6 +50,10 @@ class Domain_Service {
             self::$domains
         ) );
     }
+    public function get_server_ips( string $domain = '' ): array {
+        $domain = strtolower( $domain );
+        return self::$servers[ $domain ] ?? array( 'prod_server_ip' => '', 'dev_server_ip' => '' );
+    }
     public function get_last_refresh() { return 0; }
 }
 function get_sites( $args ) { return array(); }
