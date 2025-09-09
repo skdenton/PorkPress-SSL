@@ -19,6 +19,23 @@ class Admin {
         /** Option key for stored domain requests. */
         private const REQUESTS_OPTION = 'porkpress_ssl_domain_requests';
 
+       /**
+        * Determine whether visual enhancements should be loaded.
+        *
+        * @return bool
+        */
+       private function visualizations_enabled(): bool {
+               if ( defined( 'PORKPRESS_SSL_DISABLE_VISUALIZATIONS' ) && PORKPRESS_SSL_DISABLE_VISUALIZATIONS ) {
+                       return false;
+               }
+
+               if ( function_exists( 'get_site_option' ) && get_site_option( 'porkpress_ssl_disable_visualizations', false ) ) {
+                       return false;
+               }
+
+               return true;
+       }
+
         /**
          * Initialize hooks.
          */
@@ -764,18 +781,25 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                echo '<p><a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'mapping-csv' ) ) ) . '">' . esc_html__( 'Export Mapping CSV', 'porkpress-ssl' ) . '</a> ';
                echo '<a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'mapping-json' ) ) ) . '">' . esc_html__( 'Export Mapping JSON', 'porkpress-ssl' ) . '</a></p>';
 
-               wp_enqueue_script(
-                       'porkpress-domain-bulk',
-                       set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-bulk.js', 'https' ),
-                       array( 'jquery', 'wp-i18n' ),
-                       PORKPRESS_SSL_VERSION,
-                       true
-               );
-               wp_set_script_translations( 'porkpress-domain-bulk', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
-               wp_localize_script( 'porkpress-domain-bulk', 'porkpressBulk', array(
-                       'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-                       'nonce'   => wp_create_nonce( 'porkpress_ssl_bulk_action' ),
-               ) );
+               if (
+                       $this->visualizations_enabled()
+                       && isset( $_GET['page'], $_GET['tab'] )
+                       && 'porkpress-ssl' === sanitize_key( wp_unslash( $_GET['page'] ) )
+                       && 'domains' === sanitize_key( wp_unslash( $_GET['tab'] ) )
+               ) {
+                       wp_enqueue_script(
+                               'porkpress-domain-bulk',
+                               set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-bulk.js', 'https' ),
+                               array( 'jquery', 'wp-i18n' ),
+                               PORKPRESS_SSL_VERSION,
+                               true
+                       );
+                       wp_set_script_translations( 'porkpress-domain-bulk', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+                       wp_localize_script( 'porkpress-domain-bulk', 'porkpressBulk', array(
+                               'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                               'nonce'   => wp_create_nonce( 'porkpress_ssl_bulk_action' ),
+                       ) );
+               }
                echo '<form id="porkpress-domain-actions" method="post">';
                echo '<table class="widefat fixed striped">';
                echo '<thead><tr>';
@@ -905,19 +929,27 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                        return;
                }
 
-               wp_enqueue_script(
-                       'porkpress-domain-dns-details',
-                       set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-details.js', 'https' ),
-                       array( 'jquery', 'wp-i18n' ),
-                       PORKPRESS_SSL_VERSION,
-                       true
-               );
-               wp_set_script_translations( 'porkpress-domain-dns-details', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
-               wp_localize_script( 'porkpress-domain-dns-details', 'porkpressDNS', array(
-                       'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-                       'nonce'   => wp_create_nonce( 'porkpress_dns_action' ),
-                       'domain'  => $domain,
-               ) );
+               if (
+                       $this->visualizations_enabled()
+                       && isset( $_GET['page'], $_GET['tab'], $_GET['domain'] )
+                       && 'porkpress-ssl' === sanitize_key( wp_unslash( $_GET['page'] ) )
+                       && 'domains' === sanitize_key( wp_unslash( $_GET['tab'] ) )
+                       && $domain === sanitize_text_field( wp_unslash( $_GET['domain'] ) )
+               ) {
+                       wp_enqueue_script(
+                               'porkpress-domain-dns-details',
+                               set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-details.js', 'https' ),
+                               array( 'jquery', 'wp-i18n' ),
+                               PORKPRESS_SSL_VERSION,
+                               true
+                       );
+                       wp_set_script_translations( 'porkpress-domain-dns-details', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+                       wp_localize_script( 'porkpress-domain-dns-details', 'porkpressDNS', array(
+                               'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                               'nonce'   => wp_create_nonce( 'porkpress_dns_action' ),
+                               'domain'  => $domain,
+                       ) );
+               }
 
                $status = $data['status'] ?? $data['dnsstatus'] ?? '';
                $expiry = $data['expiry'] ?? $data['expiration'] ?? $data['exdate'] ?? '';
@@ -2007,14 +2039,20 @@ echo '</tr>';
                echo '<p class="description">' . esc_html__( 'Only domains not currently mapped are listed.', 'porkpress-ssl' ) . '</p>';
                echo '</form>';
 
-               wp_enqueue_script(
-                       'porkpress-site-aliases',
-                       set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/site-aliases.js', 'https' ),
-                       array( 'jquery', 'wp-i18n' ),
-                       PORKPRESS_SSL_VERSION,
-                       true
-               );
-               wp_set_script_translations( 'porkpress-site-aliases', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+               if (
+                       $this->visualizations_enabled()
+                       && isset( $_GET['page'] )
+                       && 'porkpress-site-aliases' === sanitize_key( wp_unslash( $_GET['page'] ) )
+               ) {
+                       wp_enqueue_script(
+                               'porkpress-site-aliases',
+                               set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/site-aliases.js', 'https' ),
+                               array( 'jquery', 'wp-i18n' ),
+                               PORKPRESS_SSL_VERSION,
+                               true
+                       );
+                       wp_set_script_translations( 'porkpress-site-aliases', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+               }
 
                echo '</div>';
        }
