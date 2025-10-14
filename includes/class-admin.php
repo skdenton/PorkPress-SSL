@@ -936,14 +936,22 @@ add_action( 'admin_notices', array( $this, 'sunrise_notice' ) );
                        && 'domains' === sanitize_key( wp_unslash( $_GET['tab'] ) )
                        && $domain === sanitize_text_field( wp_unslash( $_GET['domain'] ) )
                ) {
-                       wp_enqueue_script(
-                               'porkpress-domain-dns-details',
-                               set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-details.js', 'https' ),
-                               array( 'jquery', 'wp-i18n' ),
-                               PORKPRESS_SSL_VERSION,
-                               true
-                       );
-                       wp_set_script_translations( 'porkpress-domain-dns-details', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+                      wp_enqueue_script(
+                              'porkpress-dns-table',
+                              set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/dns-table.js', 'https' ),
+                              array( 'jquery', 'wp-i18n' ),
+                              PORKPRESS_SSL_VERSION,
+                              true
+                      );
+                      wp_set_script_translations( 'porkpress-dns-table', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
+                      wp_enqueue_script(
+                              'porkpress-domain-dns-details',
+                              set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/domain-details.js', 'https' ),
+                              array( 'porkpress-dns-table' ),
+                              PORKPRESS_SSL_VERSION,
+                              true
+                      );
+                      wp_set_script_translations( 'porkpress-domain-dns-details', 'porkpress-ssl', plugin_dir_path( dirname( __FILE__ ) ) . 'languages' );
                        wp_localize_script( 'porkpress-domain-dns-details', 'porkpressDNS', array(
                                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                                'nonce'   => wp_create_nonce( 'porkpress_dns_action' ),
