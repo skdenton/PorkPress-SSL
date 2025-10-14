@@ -17,6 +17,7 @@
         var $table = settings.$table;
         var speak = settings.speak;
         var __ = settings.__;
+        var initialAction = settings.initialAction;
 
         function sanitizeField( value ) {
             return $( '<div>' ).text( value == null ? '' : value ).text();
@@ -113,12 +114,78 @@
                 .fail( handleError );
         }
 
+        function getRowData( $tr ) {
+            var type = $tr.find( '.dns-type' ).val().trim();
+            var name = $tr.find( '.dns-name' ).val().trim();
+            var content = $tr.find( '.dns-content' ).val().trim();
+            var ttlStr = $tr.find( '.dns-ttl' ).val().trim();
+            var ttl = parseInt( ttlStr, 10 );
+
+            if ( ! type || ! name || ! content || ttlStr === '' ) {
+                return { error: __( 'All fields are required.', 'porkpress-ssl' ) };
+            }
+
+            if ( isNaN( ttl ) ) {
+                return { error: __( 'TTL must be a number.', 'porkpress-ssl' ) };
+            }
+
+            return {
+                data: {
+                    type: type,
+                    name: name,
+                    content: content,
+                    ttl: ttl
+                }
+            };
+        }
+
+        function bindEvents() {
+            $table.on( 'click', '.dns-add-btn', function ( e ) {
+                e.preventDefault();
+                var result = getRowData( $( this ).closest( 'tr' ) );
+                if ( result.error ) {
+                    speak( result.error );
+                    return;
+                }
+                send( 'add', result.data, __( 'Record added.', 'porkpress-ssl' ) );
+            } );
+
+            $table.on( 'click', '.dns-update', function ( e ) {
+                e.preventDefault();
+                var $tr = $( this ).closest( 'tr' );
+                var result = getRowData( $tr );
+                if ( result.error ) {
+                    speak( result.error );
+                    return;
+                }
+                var id = $tr.data( 'id' );
+                send( 'edit', $.extend( { record_id: id }, result.data ), __( 'Record updated.', 'porkpress-ssl' ) );
+            } );
+
+            $table.on( 'click', '.dns-delete', function ( e ) {
+                e.preventDefault();
+                if ( ! confirm( __( 'Delete this record?', 'porkpress-ssl' ) ) ) {
+                    return;
+                }
+                var $tr = $( this ).closest( 'tr' );
+                var id = $tr.data( 'id' );
+                send( 'delete', { record_id: id }, __( 'Record deleted.', 'porkpress-ssl' ) );
+            } );
+        }
+
+        bindEvents();
+
+        if ( initialAction && initialAction.action ) {
+            send( initialAction.action, initialAction.data || {}, initialAction.successMessage );
+        }
+
         return {
             sanitizeField: sanitizeField,
             render: render,
             handleError: handleError,
             send: send,
-            $table: $table
+            $table: $table,
+            bindEvents: bindEvents
         };
     }
 
