@@ -6,12 +6,19 @@ jQuery(function($){
         var site = $('input[name="site_name"]').val();
         if(!domains.length || !action){return;}
         var override = '';
+        var confirmPattern = /^CONFIRM$/;
         if(action === 'detach'){
-            override = prompt(wp.i18n.__('Type CONFIRM to detach selected domains', 'porkpress-ssl'));
-            if(override !== 'CONFIRM'){return;}
+            var detachInput = prompt(wp.i18n.__('Type CONFIRM to detach selected domains', 'porkpress-ssl'));
+            if(detachInput === null){return;}
+            var trimmedDetach = detachInput.trim();
+            if(!confirmPattern.test(trimmedDetach)){return;}
+            override = 'CONFIRM';
         } else if(action === 'attach'){
-            override = prompt(wp.i18n.__('Type CONFIRM to override DNS check', 'porkpress-ssl'));
-            if(override === null){return;}
+            var attachInput = prompt(wp.i18n.__('Type CONFIRM to override DNS check', 'porkpress-ssl'));
+            if(attachInput === null){return;}
+            var trimmedAttach = attachInput.trim();
+            if(!confirmPattern.test(trimmedAttach)){return;}
+            override = 'CONFIRM';
         }
         var total = domains.length, processed = 0;
         var $progress = $('#porkpress-domain-progress');
