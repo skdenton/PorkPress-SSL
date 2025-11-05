@@ -4,6 +4,7 @@
  * Certbot hook for managing Porkbun DNS TXT records.
  */
 
+use PorkPress\SSL\Domain_Parser;
 use PorkPress\SSL\Logger;
 use PorkPress\SSL\Porkbun_Client;
 use PorkPress\SSL\Porkbun_Client_Error;
@@ -33,9 +34,10 @@ if (is_string($config_path) && file_exists($config_path)) {
             continue;
         }
         if (preg_match('/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/', $line, $m)) {
-            $key = $m[1];
-            $val = trim($m[2], "'\"");
-            if ('' === getenv($key)) {
+            $key     = $m[1];
+            $val     = trim($m[2], "'\"");
+            $current = getenv($key);
+            if (false === $current || '' === $current) {
                 putenv($key . '=' . $val);
             }
         }
@@ -104,16 +106,6 @@ if ( '' === $domain || ! filter_var( $domain, FILTER_VALIDATE_DOMAIN, FILTER_FLA
     exit( 1 );
 }
 
-// Determine base zone and record name.
-$parts = explode( '.', $domain );
-if ( count( $parts ) < 2 ) {
-    fwrite( STDERR, "Invalid domain: {$domain}\n" );
-    exit( 1 );
-}
-$zone        = implode( '.', array_slice( $parts, -2 ) );
-$sub         = implode( '.', array_slice( $parts, 0, -2 ) );
-$record_name = '_acme-challenge' . ( $sub ? '.' . $sub : '' );
-
 // Fetch API credentials.
 $api_key    = getenv( 'PORKBUN_API_KEY' ) ?: getenv( 'PORKPRESS_API_KEY' );
 $api_secret = getenv( 'PORKBUN_API_SECRET' ) ?: getenv( 'PORKPRESS_API_SECRET' );
@@ -131,6 +123,39 @@ if ( empty($api_key) || empty($api_secret) ) {
 }
 
 $client = new Porkbun_Client($api_key, $api_secret, null, $timeout);
+
+$split = Domain_Parser::split(
+    $domain,
+    array(),
+    function ( string $candidate ) use ( $client ) {
+        static $cache = array();
+
+        $key = strtolower( $candidate );
+        if ( array_key_exists( $key, $cache ) ) {
+            return $cache[ $key ];
+        }
+
+        try {
+            $result = $client->get_ns( $candidate );
+        } catch ( \Throwable $e ) {
+            $cache[ $key ] = false;
+            return false;
+        }
+
+        $valid = ! ( $result instanceof Porkbun_Client_Error );
+        $cache[ $key ] = $valid;
+        return $valid;
+    }
+);
+
+$zone        = $split['zone'];
+$sub         = $split['name'];
+$zone = trim( $zone );
+if ( '' === $zone ) {
+    fwrite( STDERR, "Unable to determine base zone for {$domain}\n" );
+    exit( 1 );
+}
+$record_name = '_acme-challenge' . ( $sub ? '.' . $sub : '' );
 
 if ( 'add' === $action || 'auth' === $action ) {
     $result = $client->create_txt_record($zone, $record_name, $validation, 600);

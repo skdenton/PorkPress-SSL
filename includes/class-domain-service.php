@@ -8,6 +8,7 @@
 namespace PorkPress\SSL;
 
 require_once __DIR__ . '/class-runner.php';
+require_once __DIR__ . '/class-domain-parser.php';
 
 defined( 'ABSPATH' ) || exit;
 
@@ -38,6 +39,13 @@ protected bool $dry_run = false;
  * @var array|null
  */
 protected ?array $domain_list_cache = null;
+
+/**
+ * Zone validation cache keyed by candidate zone.
+ *
+ * @var array<string, bool>
+ */
+protected array $zone_validation_cache = array();
 
 private const DOMAIN_CACHE_OPTION = 'porkpress_ssl_domain_cache';
 private const DOMAIN_LIST_MAX_PAGES = 100;
@@ -498,13 +506,14 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
             $current_page++;
         } while ( ! empty( $domains ) );
 
-        foreach ( $all_domains as &$domain_info ) {
-            $root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
-            if ( ! $root ) {
-                $domain_info['dns'] = array();
-                $domain_info['subdomains'] = array();
-                continue;
-            }
+$root_domains = array();
+foreach ( $all_domains as &$domain_info ) {
+$root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
+if ( ! $root ) {
+$domain_info['dns'] = array();
+$domain_info['subdomains'] = array();
+continue;
+}
 
             $records = $this->client->get_records( $root );
             if ( $records instanceof Porkbun_Client_Error ) {
@@ -515,63 +524,77 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
                 continue;
             }
 
-            $domain_info['dns'] = $records['records'] ?? array();
-            $domain_info['subdomains'] = array();
+			$domain_info['dns'] = $records['records'] ?? array();
+			$domain_info['subdomains'] = array();
 
-            $ns = $this->client->get_nameservers( $root );
-            if ( $ns instanceof Porkbun_Client_Error ) {
-                $domain_info['nameservers'] = array();
-            } else {
-                $domain_info['nameservers'] = $ns['ns'] ?? array();
-            }
+			$ns = $this->client->get_nameservers( $root );
+			if ( $ns instanceof Porkbun_Client_Error ) {
+				$domain_info['nameservers'] = array();
+			} else {
+				$domain_info['nameservers'] = $ns['ns'] ?? array();
+			}
 
-            $domain_info['details'] = $domain_info;
+			$details = $domain_info;
+			unset( $details['dns'], $details['subdomains'], $details['details'], $details['nameservers'] );
+			$domain_info['details'] = $details;
 
-            $seen = array();
-            foreach ( $domain_info['dns'] as $rec ) {
-                $type = $rec['type'] ?? '';
-                $name = $rec['name'] ?? '';
+			$seen = array();
+			foreach ( $domain_info['dns'] as $rec ) {
+				$type = $rec['type'] ?? '';
+				$name = $rec['name'] ?? '';
 
-                if ( 'CNAME' === $type && strpos( $name, '*' ) !== false ) {
-                    continue;
-                }
+				if ( 'CNAME' === $type && strpos( $name, '*' ) !== false ) {
+					continue;
+				}
 
-                if ( '' === $name || '@' === $name ) {
-                    continue;
-                }
+				if ( '' === $name || '@' === $name ) {
+					continue;
+				}
 
-                $fqdn = $name;
-                $suffix = '.' . $root;
+				$fqdn = $name;
+				$suffix = '.' . $root;
 
-                if ( $name !== $root ) {
-                    $name_len = strlen( $name );
-                    $suffix_len = strlen( $suffix );
-                    if ( $name_len < $suffix_len || substr( $name, -$suffix_len ) !== $suffix ) {
-                        $fqdn = $name . '.' . $root;
-                    }
-                }
+				if ( $name !== $root ) {
+					$name_len = strlen( $name );
+					$suffix_len = strlen( $suffix );
+					if ( $name_len < $suffix_len || substr( $name, -$suffix_len ) !== $suffix ) {
+						$fqdn = $name . '.' . $root;
+					}
+				}
 
-                $key  = strtolower( $fqdn );
-                if ( isset( $seen[ $key ] ) ) {
-                    continue;
-                }
-                $seen[ $key ] = true;
-                $domain_info['subdomains'][] = array(
-                    'domain'      => $fqdn,
-                    'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
-                    'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
-                    'dns'         => array( $rec ),
-                    'nameservers' => $domain_info['nameservers'] ?? array(),
-                    'details'     => $domain_info['details'] ?? array(),
-                );
-            }
-        }
-        unset( $domain_info );
+				$key  = strtolower( $fqdn );
+				if ( isset( $seen[ $key ] ) ) {
+					continue;
+				}
+				$seen[ $key ] = true;
+				$domain_info['subdomains'][] = array(
+					'domain'      => $fqdn,
+					'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
+					'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+					'dns'         => array( $rec ),
+					'nameservers' => $domain_info['nameservers'] ?? array(),
+					'details'     => $domain_info['details'] ?? array(),
+				);
+			}
 
-        $final = array(
-            'status'       => $status,
-            'domains'      => $all_domains,
-        );
+			$root_domains[] = array(
+				'domain'      => $root,
+				'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
+				'type'        => $domain_info['type'] ?? $domain_info['tld'] ?? '',
+				'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+				'nameservers' => $domain_info['nameservers'] ?? array(),
+				'dns'         => $domain_info['dns'] ?? array(),
+				'details'     => $domain_info['details'] ?? array(),
+				'subdomains'  => $domain_info['subdomains'] ?? array(),
+			);
+		}
+		unset( $domain_info );
+
+		$final = array(
+			'status'       => $status,
+			'domains'      => $all_domains,
+			'root_domains' => $root_domains,
+		);
 
         $this->domain_list_cache = $final;
 
@@ -746,20 +769,63 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
         * @param string $fqdn Domain name.
         * @return array{zone:string,name:string}
         */
-       private function split_domain( string $fqdn ): array {
-               $parts = explode( '.', $fqdn );
-               if ( count( $parts ) <= 2 ) {
-                       return array(
-                               'zone' => $fqdn,
-                               'name' => '',
-                       );
-               }
+	private function split_domain( string $fqdn ): array {
+		$known_roots = $this->collect_root_domain_names();
+		$validator   = null;
+		if ( isset( $this->client ) && method_exists( $this->client, 'get_ns' ) ) {
+			$client    = $this->client;
+			$cache_ref =& $this->zone_validation_cache;
+			$validator = static function ( string $candidate ) use ( $client, &$cache_ref ) {
+				$key = strtolower( $candidate );
+				if ( array_key_exists( $key, $cache_ref ) ) {
+					return $cache_ref[ $key ];
+				}
 
-               return array(
-                       'zone' => implode( '.', array_slice( $parts, -2 ) ),
-                       'name' => implode( '.', array_slice( $parts, 0, -2 ) ),
-               );
-       }
+				try {
+					$result = $client->get_ns( $candidate );
+				} catch ( \Throwable $e ) {
+					$cache_ref[ $key ] = false;
+					return false;
+				}
+
+				$valid              = ! ( $result instanceof Porkbun_Client_Error );
+				$cache_ref[ $key ] = $valid;
+
+				return $valid;
+			};
+		}
+
+		return Domain_Parser::split( $fqdn, $known_roots, $validator );
+	}
+
+	/**
+	 * Collect known registered root domains for zone detection.
+	 *
+	 * @return array<string>
+	 */
+	private function collect_root_domain_names(): array {
+		$roots = array();
+
+		$data_sets = array();
+		if ( is_array( $this->domain_list_cache ) ) {
+			$data_sets[] = $this->domain_list_cache;
+		}
+
+		if ( function_exists( 'get_site_option' ) ) {
+			$cached = get_site_option( self::DOMAIN_CACHE_OPTION );
+			if ( is_array( $cached ) && isset( $cached['data'] ) && is_array( $cached['data'] ) ) {
+				$data_sets[] = $cached['data'];
+			}
+		}
+
+		foreach ( $data_sets as $data ) {
+			foreach ( Domain_Parser::known_roots_from_dataset( $data ) as $root ) {
+				$roots[ strtolower( $root ) ] = true;
+			}
+		}
+
+		return array_keys( $roots );
+	}
 
        /**
         * Create an A record pointing the domain to the network IP.
