@@ -145,6 +145,9 @@ class Runner {
             return is_executable( $cmd );
         }
         $result = self::raw_run( 'command -v ' . escapeshellarg( $cmd ) . ' 2>/dev/null' );
+        if ( 0 !== $result['code'] ) {
+            return false;
+        }
         return '' !== trim( $result['output'] );
     }
 

@@ -58,7 +58,7 @@ class Domain_Parser {
 		}
 
 		if ( '' === $zone && null !== $validator ) {
-			for ( $i = $part_count; $i >= 2; $i-- ) {
+			for ( $i = 2; $i <= $part_count; $i++ ) {
 				$candidate = implode( '.', array_slice( $parts, -$i ) );
 				if ( self::validate_candidate( $validator, $candidate ) ) {
 					$zone = $candidate;

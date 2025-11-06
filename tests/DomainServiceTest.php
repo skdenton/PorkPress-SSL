@@ -121,8 +121,14 @@ if ( ! class_exists( 'WP_Error' ) ) {
     }
 }
 
+if ( ! isset( $GLOBALS['porkpress_site_meta'] ) ) {
+    $GLOBALS['porkpress_site_meta'] = array();
+}
 if ( ! function_exists( 'update_site_meta' ) ) {
-    function update_site_meta( $site_id, $key, $value ) {}
+    function update_site_meta( $site_id, $key, $value ) {
+        $GLOBALS['porkpress_site_meta'][ $site_id ][ $key ] = $value;
+        return true;
+    }
 }
 
 require_once __DIR__ . '/helpers/MockWpdb.php';
@@ -564,6 +570,9 @@ class DomainServiceTest extends TestCase {
     }
 
     public function testAttachToSiteReturnsErrorOnDnsMismatch() {
+        global $wpdb;
+        $wpdb = new MockWpdb();
+
         $service = new class extends \PorkPress\SSL\Domain_Service {
             public function __construct() { $this->missing_credentials = false; }
             public function check_dns_health( string $domain ) { return new WP_Error( 'dns', 'bad' ); }
@@ -573,9 +582,48 @@ class DomainServiceTest extends TestCase {
         $this->assertInstanceOf( WP_Error::class, $result );
     }
 
+    public function testAttachToSiteAliasFailureLeavesMetaUnset() {
+        global $porkpress_site_meta;
+        $porkpress_site_meta = array();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public function __construct() { $this->missing_credentials = false; }
+            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '', ?int $ttl = null ) {
+                return new WP_Error( 'alias', 'fail' );
+            }
+        };
+
+        $result = $service->attach_to_site( 'example.com', 7 );
+        $this->assertInstanceOf( WP_Error::class, $result );
+        $this->assertArrayNotHasKey( 7, $porkpress_site_meta );
+    }
+
+    public function testAttachToSiteDnsFailureLeavesMetaUnset() {
+        global $porkpress_site_meta;
+        $porkpress_site_meta = array();
+
+        $service = new class extends \PorkPress\SSL\Domain_Service {
+            public bool $alias_called = false;
+            public function __construct() { $this->missing_credentials = false; }
+            public function add_alias( int $site_id, string $domain, bool $is_primary = false, string $status = '', ?int $ttl = null ) {
+                $this->alias_called = true;
+                return true;
+            }
+            public function check_dns_health( string $domain ) { return new WP_Error( 'dns', 'bad' ); }
+        };
+
+        $result = $service->attach_to_site( 'example.com', 9 );
+        $this->assertInstanceOf( WP_Error::class, $result );
+        $this->assertTrue( $service->alias_called );
+        $this->assertArrayNotHasKey( 9, $porkpress_site_meta );
+    }
+
     public function testAttachToSiteBypassesDnsCheckWithFilter() {
         global $porkpress_skip_dns_check;
         $porkpress_skip_dns_check = true;
+
+        global $wpdb;
+        $wpdb = new MockWpdb();
 
         $client = new class extends \PorkPress\SSL\Porkbun_Client {
             public function __construct() {}

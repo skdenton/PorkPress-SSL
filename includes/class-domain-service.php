@@ -649,19 +649,19 @@ continue;
                        ? apply_filters( 'porkpress_ssl_skip_dns_check', false, $domain, $site_id )
                        : false;
 
-               if ( function_exists( 'update_site_meta' ) ) {
-                       update_site_meta( $site_id, 'porkpress_domain', $domain );
-               }
-
                $ttl = $ttl ?? 600;
                if ( function_exists( 'apply_filters' ) ) {
                        $ttl = (int) apply_filters( 'porkpress_ssl_a_record_ttl', $ttl, $domain, $site_id );
                }
 
                $result = $this->add_alias( $site_id, $domain, true, 'active', $ttl );
-               if ( $result instanceof Porkbun_Client_Error ) {
-                       return $result;
-               }
+              if ( $result instanceof Porkbun_Client_Error || $result instanceof \WP_Error ) {
+                      return $result;
+              }
+
+              if ( true !== $result ) {
+                      return $result;
+              }
 
                if ( ! $skip_check ) {
                        $check = $this->check_dns_health( $domain );
@@ -669,6 +669,10 @@ continue;
                                return $check;
                        }
                }
+
+              if ( function_exists( 'update_site_meta' ) ) {
+                      update_site_meta( $site_id, 'porkpress_domain', $domain );
+              }
 
                return true;
        }
