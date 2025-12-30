@@ -449,11 +449,12 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
      * @return array|Porkbun_Client_Error
      */
     public function refresh_domains( int $page = 1, int $per_page = 100 ) {
-        $status       = 'SUCCESS';
-        $all_domains  = array();
-        $current_page = $page;
-        $page_count   = 0;
-        $page_hashes  = array();
+        $status            = 'SUCCESS';
+        $all_domains       = array();
+        $flattened_domains = array();
+        $current_page      = $page;
+        $page_count        = 0;
+        $page_hashes       = array();
 
         do {
             $page_count++;
@@ -506,95 +507,101 @@ private const DNS_PROPAGATION_OPTION = 'porkpress_ssl_dns_propagation';
             $current_page++;
         } while ( ! empty( $domains ) );
 
-$root_domains = array();
-foreach ( $all_domains as &$domain_info ) {
-$root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
-if ( ! $root ) {
-$domain_info['dns'] = array();
-$domain_info['subdomains'] = array();
-continue;
-}
+        $root_domains = array();
+        foreach ( $all_domains as &$domain_info ) {
+            $root = $domain_info['domain'] ?? $domain_info['name'] ?? '';
+            if ( ! $root ) {
+                $domain_info['dns']        = array();
+                $domain_info['subdomains'] = array();
+                continue;
+            }
 
             $records = $this->client->get_records( $root );
             if ( $records instanceof Porkbun_Client_Error ) {
                 $domain_info['dns']         = array();
                 $domain_info['nameservers'] = array();
                 $domain_info['details']     = array();
-                $domain_info['subdomains'] = array();
+                $domain_info['subdomains']  = array();
                 continue;
             }
 
-			$domain_info['dns'] = $records['records'] ?? array();
-			$domain_info['subdomains'] = array();
+            $domain_info['dns']        = $records['records'] ?? array();
+            $domain_info['subdomains'] = array();
 
-			$ns = $this->client->get_nameservers( $root );
-			if ( $ns instanceof Porkbun_Client_Error ) {
-				$domain_info['nameservers'] = array();
-			} else {
-				$domain_info['nameservers'] = $ns['ns'] ?? array();
-			}
+            $ns = $this->client->get_nameservers( $root );
+            if ( $ns instanceof Porkbun_Client_Error ) {
+                $domain_info['nameservers'] = array();
+            } else {
+                $domain_info['nameservers'] = $ns['ns'] ?? array();
+            }
 
-			$details = $domain_info;
-			unset( $details['dns'], $details['subdomains'], $details['details'], $details['nameservers'] );
-			$domain_info['details'] = $details;
+            $details = $domain_info;
+            unset( $details['dns'], $details['subdomains'], $details['details'], $details['nameservers'] );
+            $domain_info['details'] = $details;
 
-			$seen = array();
-			foreach ( $domain_info['dns'] as $rec ) {
-				$type = $rec['type'] ?? '';
-				$name = $rec['name'] ?? '';
+            $seen = array();
+            foreach ( $domain_info['dns'] as $rec ) {
+                $type = $rec['type'] ?? '';
+                $name = $rec['name'] ?? '';
 
-				if ( 'CNAME' === $type && strpos( $name, '*' ) !== false ) {
-					continue;
-				}
+                if ( 'CNAME' === $type && strpos( $name, '*' ) !== false ) {
+                    continue;
+                }
 
-				if ( '' === $name || '@' === $name ) {
-					continue;
-				}
+                if ( '' === $name || '@' === $name ) {
+                    continue;
+                }
 
-				$fqdn = $name;
-				$suffix = '.' . $root;
+                $fqdn   = $name;
+                $suffix = '.' . $root;
 
-				if ( $name !== $root ) {
-					$name_len = strlen( $name );
-					$suffix_len = strlen( $suffix );
-					if ( $name_len < $suffix_len || substr( $name, -$suffix_len ) !== $suffix ) {
-						$fqdn = $name . '.' . $root;
-					}
-				}
+                if ( $name !== $root ) {
+                    $name_len   = strlen( $name );
+                    $suffix_len = strlen( $suffix );
+                    if ( $name_len < $suffix_len || substr( $name, -$suffix_len ) !== $suffix ) {
+                        $fqdn = $name . '.' . $root;
+                    }
+                }
 
-				$key  = strtolower( $fqdn );
-				if ( isset( $seen[ $key ] ) ) {
-					continue;
-				}
-				$seen[ $key ] = true;
-				$domain_info['subdomains'][] = array(
-					'domain'      => $fqdn,
-					'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
-					'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
-					'dns'         => array( $rec ),
-					'nameservers' => $domain_info['nameservers'] ?? array(),
-					'details'     => $domain_info['details'] ?? array(),
-				);
-			}
+                $key = strtolower( $fqdn );
+                if ( isset( $seen[ $key ] ) ) {
+                    continue;
+                }
+                $seen[ $key ] = true;
+                $domain_info['subdomains'][] = array(
+                    'domain'      => $fqdn,
+                    'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
+                    'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+                    'dns'         => array( $rec ),
+                    'nameservers' => $domain_info['nameservers'] ?? array(),
+                    'details'     => $domain_info['details'] ?? array(),
+                );
+            }
 
-			$root_domains[] = array(
-				'domain'      => $root,
-				'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
-				'type'        => $domain_info['type'] ?? $domain_info['tld'] ?? '',
-				'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
-				'nameservers' => $domain_info['nameservers'] ?? array(),
-				'dns'         => $domain_info['dns'] ?? array(),
-				'details'     => $domain_info['details'] ?? array(),
-				'subdomains'  => $domain_info['subdomains'] ?? array(),
-			);
-		}
-		unset( $domain_info );
+            $root_entry = array(
+                'domain'      => $root,
+                'status'      => $domain_info['status'] ?? $domain_info['dnsstatus'] ?? '',
+                'type'        => $domain_info['type'] ?? $domain_info['tld'] ?? '',
+                'expiry'      => $domain_info['expiry'] ?? $domain_info['expiration'] ?? $domain_info['exdate'] ?? '',
+                'nameservers' => $domain_info['nameservers'] ?? array(),
+                'dns'         => $domain_info['dns'] ?? array(),
+                'details'     => $domain_info['details'] ?? array(),
+                'subdomains'  => $domain_info['subdomains'] ?? array(),
+            );
 
-		$final = array(
-			'status'       => $status,
-			'domains'      => $all_domains,
-			'root_domains' => $root_domains,
-		);
+            $root_domains[]      = $root_entry;
+            $flattened_domains[] = $root_entry;
+            foreach ( $root_entry['subdomains'] as $subdomain ) {
+                $flattened_domains[] = $subdomain;
+            }
+        }
+        unset( $domain_info );
+
+        $final = array(
+            'status'       => $status,
+            'domains'      => $flattened_domains,
+            'root_domains' => $root_domains,
+        );
 
         $this->domain_list_cache = $final;
 
