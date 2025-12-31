@@ -1225,6 +1225,20 @@ if ( isset( $base_cmds[ $action ] ) ) {
                 'manual_required'
         );
 
+        if ( 'delete' === $action ) {
+                $state_root = get_site_option(
+                        'porkpress_ssl_state_root',
+                        defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl'
+                );
+                $manifest = rtrim( $state_root, '/\\' ) . '/manifest.json';
+                if ( file_exists( $manifest ) ) {
+                        $data = json_decode( file_get_contents( $manifest ), true );
+                        if ( is_array( $data ) && ( $data['cert_name'] ?? '' ) === $cert ) {
+                                @unlink( $manifest );
+                        }
+                }
+        }
+
         Notifier::notify(
                 'warning',
                 __( 'Run SSL command manually', 'porkpress-ssl' ),
