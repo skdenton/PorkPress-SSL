@@ -1209,94 +1209,27 @@ if ( ! $action || ! $cert ) {
 return;
 }
 check_admin_referer( 'porkpress_ssl_action' );
-$cmd_cert = escapeshellarg( $cert );
-$user_id  = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
-if ( 'renew' === $action ) {
-    $cmd    = "certbot renew --cert-name {$cmd_cert}";
-    $result = Runner::run( $cmd, 'certbot' );
-    $domains = Certbot_Helper::list_certificates()[ $cert ]['domains'] ?? array();
-    if ( 0 === $result['code'] ) {
+$cmd_cert  = escapeshellarg( $cert );
+$base_cmds = array(
+        'renew'  => sprintf( 'certbot renew --cert-name %s', $cmd_cert ),
+        'delete' => sprintf( 'certbot delete --cert-name %s --non-interactive --quiet', $cmd_cert ),
+);
+if ( isset( $base_cmds[ $action ] ) ) {
         Logger::info(
-            'certbot_renew',
-            array(
-                'cmd'     => $cmd,
-                'cert'    => $cert,
-                'domains' => $domains,
-                'output'  => $result['output'],
-                'user_id' => $user_id,
-            ),
-            'success'
+                'certbot_manual',
+                array(
+                        'cert'    => $cert,
+                        'action'  => $action,
+                        'command' => $base_cmds[ $action ],
+                ),
+                'manual_required'
         );
+
         Notifier::notify(
-            'success',
-            __( 'SSL certificate renewed', 'porkpress-ssl' ),
-            sprintf( __( 'Certificate %s renewed.', 'porkpress-ssl' ), $cert )
+                'warning',
+                __( 'Run SSL command manually', 'porkpress-ssl' ),
+                sprintf( __( 'Run this on your server: %s', 'porkpress-ssl' ), '<code>' . esc_html( $base_cmds[ $action ] ) . '</code>' )
         );
-    } else {
-        Logger::error(
-            'certbot_renew',
-            array(
-                'cmd'     => $cmd,
-                'cert'    => $cert,
-                'output'  => $result['output'],
-                'user_id' => $user_id,
-            ),
-            'failed'
-        );
-        Notifier::notify(
-            'error',
-            __( 'SSL renewal failed', 'porkpress-ssl' ),
-            sprintf( __( 'Could not renew certificate %s.', 'porkpress-ssl' ), $cert )
-        );
-    }
-} elseif ( 'delete' === $action ) {
-    $existing = Certbot_Helper::list_certificates();
-    $domains  = $existing[ $cert ]['domains'] ?? array();
-    $cmd      = "certbot delete --cert-name {$cmd_cert} --non-interactive --quiet";
-    $result   = Runner::run( $cmd, 'certbot' );
-    if ( 0 === $result['code'] ) {
-        $state_root = get_site_option( 'porkpress_ssl_state_root', defined( 'PORKPRESS_STATE_ROOT' ) ? PORKPRESS_STATE_ROOT : '/var/lib/porkpress-ssl' );
-        $manifest   = rtrim( $state_root, '/\\' ) . '/manifest.json';
-        if ( file_exists( $manifest ) ) {
-            $data = json_decode( file_get_contents( $manifest ), true );
-            if ( is_array( $data ) && ( $data['cert_name'] ?? '' ) === $cert ) {
-                @unlink( $manifest );
-            }
-        }
-        Logger::info(
-            'certbot_delete',
-            array(
-                'cmd'     => $cmd,
-                'cert'    => $cert,
-                'domains' => $domains,
-                'output'  => $result['output'],
-                'user_id' => $user_id,
-            ),
-            'success'
-        );
-        Notifier::notify(
-            'success',
-            __( 'SSL certificate deleted', 'porkpress-ssl' ),
-            sprintf( __( 'Certificate %s deleted.', 'porkpress-ssl' ), $cert )
-        );
-    } else {
-        Logger::error(
-            'certbot_delete',
-            array(
-                'cmd'     => $cmd,
-                'cert'    => $cert,
-                'domains' => $domains,
-                'output'  => $result['output'],
-                'user_id' => $user_id,
-            ),
-            'failed'
-        );
-        Notifier::notify(
-            'error',
-            __( 'SSL delete failed', 'porkpress-ssl' ),
-            sprintf( __( 'Could not delete certificate %s.', 'porkpress-ssl' ), $cert )
-        );
-    }
 }
 wp_safe_redirect( network_admin_url( 'admin.php?page=porkpress-ssl&tab=ssl' ) );
 exit;
@@ -1659,6 +1592,23 @@ echo '<tr>';
 
                $certs = Certbot_Helper::list_certificates();
 
+               wp_enqueue_script(
+                       'porkpress-ssl-actions',
+                       set_url_scheme( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/ssl-actions.js', 'https' ),
+                       array(),
+                       PORKPRESS_SSL_VERSION,
+                       true
+               );
+
+               wp_localize_script(
+                       'porkpress-ssl-actions',
+                       'porkpressSslActions',
+                       array(
+                               'copied' => __( 'Command copied to clipboard.', 'porkpress-ssl' ),
+                               'failed' => __( 'Unable to copy command.', 'porkpress-ssl' ),
+                       )
+               );
+
                echo '<h2>' . esc_html__( 'Certificates', 'porkpress-ssl' ) . '</h2>';
                echo '<table class="widefat fixed striped">';
                echo '<thead><tr><th>' . esc_html__( 'Certificate Name', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Domains', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Expiration', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Status', 'porkpress-ssl' ) . '</th><th>' . esc_html__( 'Actions', 'porkpress-ssl' ) . '</th></tr></thead>';
@@ -1673,18 +1623,28 @@ $expiry      = $info['expiry'] ?? '';
 $status      = $info['status'] ?? '';
 $formatted   = $expiry ? date_i18n( get_option( 'date_format' ), strtotime( $expiry ) ) : '';
 $base        = 'admin.php?page=porkpress-ssl&tab=ssl&cert=' . rawurlencode( $name );
-$renew_url   = wp_nonce_url( network_admin_url( $base . '&action=renew' ), 'porkpress_ssl_action' );
-$del_url     = wp_nonce_url( network_admin_url( $base . '&action=delete' ), 'porkpress_ssl_action' );
 $domains_url = network_admin_url( 'admin.php?page=porkpress-cert-domains&cert=' . rawurlencode( $name ) );
+$renew_cmd   = sprintf( 'certbot renew --cert-name %s', escapeshellarg( $name ) );
+$delete_cmd  = sprintf( 'certbot delete --cert-name %s --non-interactive --quiet', escapeshellarg( $name ) );
 echo '<tr>';
 echo '<td>' . esc_html( $name ) . '</td>';
 echo '<td>' . esc_html( implode( ', ', $domains ) ) . '</td>';
 echo '<td>' . esc_html( $formatted ) . '</td>';
 echo '<td>' . esc_html( $status ) . '</td>';
 echo '<td>'
-. '<a href="' . esc_url( $renew_url ) . '">' . esc_html__( 'Renew', 'porkpress-ssl' ) . '</a> | '
-. '<a href="' . esc_url( $del_url ) . '">' . esc_html__( 'Delete', 'porkpress-ssl' ) . '</a> | '
+. '<div class="porkpress-command-row">'
+. '<strong>' . esc_html__( 'Renew', 'porkpress-ssl' ) . ':</strong> '
+. '<code>' . esc_html( $renew_cmd ) . '</code> '
+. '<button type="button" class="button button-small porkpress-copy-command" data-command="' . esc_attr( $renew_cmd ) . '">' . esc_html__( 'Copy', 'porkpress-ssl' ) . '</button>'
+. '</div>'
+. '<div class="porkpress-command-row">'
+. '<strong>' . esc_html__( 'Delete', 'porkpress-ssl' ) . ':</strong> '
+. '<code>' . esc_html( $delete_cmd ) . '</code> '
+. '<button type="button" class="button button-small porkpress-copy-command" data-command="' . esc_attr( $delete_cmd ) . '">' . esc_html__( 'Copy', 'porkpress-ssl' ) . '</button>'
+. '</div>'
+. '<div class="porkpress-command-row">'
 . '<a href="' . esc_url( $domains_url ) . '">' . esc_html__( 'Cert Domains', 'porkpress-ssl' ) . '</a>'
+. '</div>'
 . '</td>';
 echo '</tr>';
 }
