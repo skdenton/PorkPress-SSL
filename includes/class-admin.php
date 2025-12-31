@@ -1672,6 +1672,8 @@ echo '</tr>';
                 $severity = isset( $_GET['severity'] ) ? sanitize_key( wp_unslash( $_GET['severity'] ) ) : '';
 
                if ( isset( $_GET['export'] ) ) {
+                       check_admin_referer( 'porkpress_ssl_export_logs' );
+
                        $export = sanitize_key( wp_unslash( $_GET['export'] ) );
                        $logs   = Logger::get_logs( array( 'severity' => $severity, 'limit' => 0 ) );
                        foreach ( $logs as &$log ) {
@@ -1712,8 +1714,8 @@ echo '</tr>';
                 }
                echo '</select> ';
                submit_button( __( 'Filter', 'porkpress-ssl' ), 'secondary', '', false );
-               echo ' <a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'csv' ) ) ) . '">' . esc_html__( 'Export CSV', 'porkpress-ssl' ) . '</a>';
-               echo ' <a class="button" href="' . esc_url( add_query_arg( array( 'export' => 'json' ) ) ) . '">' . esc_html__( 'Export JSON', 'porkpress-ssl' ) . '</a>';
+               echo ' <a class="button" href="' . esc_url( wp_nonce_url( add_query_arg( array( 'export' => 'csv' ) ), 'porkpress_ssl_export_logs' ) ) . '">' . esc_html__( 'Export CSV', 'porkpress-ssl' ) . '</a>';
+               echo ' <a class="button" href="' . esc_url( wp_nonce_url( add_query_arg( array( 'export' => 'json' ) ), 'porkpress_ssl_export_logs' ) ) . '">' . esc_html__( 'Export JSON', 'porkpress-ssl' ) . '</a>';
                echo '</form>';
 
                 echo '<table class="widefat fixed">';
